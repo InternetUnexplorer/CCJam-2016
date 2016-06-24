@@ -9,7 +9,6 @@ function testInstall(requiredAPIs)
 end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
-	"override",
 	"loglib",
 	"connection",
 	"conn/AES",
@@ -22,11 +21,8 @@ if not testInstall(requiredAPIs) then
 end
 loglib.init(localDir.."logs/")
 ------------------------------------------------------------------------
---_OLD_ENV = {}
---override.hook(localDir.."libs/hooks/", _OLD_ENV, _G)
---override.unhook(_OLD_ENV)
-
-connection.benchmark("Hey, this is pretty neat!")
+loglib.info("Starting connection listener...")
+connection.connectionHandler(peripheral.wrap( "top" ))
 ------------------------------------------------------------------------
 loglib.shutdown()
 for i = 1, #requiredAPIs do
