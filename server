@@ -18,7 +18,9 @@ if not testInstall(requiredAPIs) then
 end
 loglib.init(localDir.."logs/")
 ------------------------------------------------------------------------
-override.hook(localDir.."libs/hooks/", {})
+_OLD_ENV = {}
+override.hook(localDir.."libs/hooks/", _OLD_ENV)
+--override.unhook(_OLD_ENV)
 
 ------------------------------------------------------------------------
 loglib.shutdown()

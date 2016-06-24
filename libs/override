@@ -1,38 +1,48 @@
-function hookFile(file, old, logger)
+function hookFile(file, old)
 	local loaded, name = {}, fs.getName(file)
 	old[name] = {}
 	local ok, err = loadfile( file, loaded )
     if ok then
         local ok, err = pcall(ok)
         if not ok then
-            logger:fatal("Error loading hooks for '"..name.."':\n"..err)
+            loglib.fatal("Error loading hooks for '"..name.."':\n"..err)
             return false
         end
     else
-        logger:fatal("Error loading hooks for '"..name.."':\n"..err)
+        loglib.fatal("Error loading hooks for '"..name.."':\n"..err)
         return false
     end
-    for k,v in pairs( loaded ) do
+    for k,v in pairs( _G[name] ) do
         if k ~= "_ENV" then
-            logger:debug("Hooking function "..name.."."..k)
-            if _G[name][k] then
-            	old[name][k] = _G[name][k]
-            	_G[name][k] = function(...)
-            		v(old[name], ...)
+            old[name][k] = _G[name][k]
+            if loaded[k] then
+            	loglib.debug("Hooking function "..name.."."..k.."()")
+            	_G[name][k] = function (...)
+            		setfenv( loaded[k], _G )
+           			loaded[k](old[name], ...)
             	end
-            else
-            	logger:warn("Function "..name.."."..k.." does not hook into any function, skipping")
             end
         end
     end  
     return true
 end
 
-function hook(dir, old)
-	local logger = loglib.getLogger("Hooks")
+function hook(dir, _OLD_ENV)
 	local files = fs.list(dir)
+	loglib.info("Loading hooks...")
 	for i, file in pairs(files) do
-		logger:info("Loading hooks for "..file)
-		hookFile(dir..file, old, logger)
+		hookFile(dir..file, _OLD_ENV)
+	end
+end
+
+function unhook(_OLD_ENV)
+	loglib.info("Unloading hooks...")
+	for k, v in pairs( _OLD_ENV ) do
+		for n, c in pairs( _OLD_ENV[k] ) do
+			if _G[k][n] ~= _OLD_ENV[k][n] then
+				loglib.debug("Unhooking "..k.."."..n.."()")
+				_G[k][n] = _OLD_ENV[k][n]
+			end
+		end
 	end
 end

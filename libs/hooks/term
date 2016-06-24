@@ -1,4 +1,3 @@
-function clear(old)
-	--old.print("Sup?")
-	old.clear()
+function clear(term)
+	print("*Evil Laugh*")
 end
