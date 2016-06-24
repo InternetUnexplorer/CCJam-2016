@@ -7,19 +7,21 @@ function testInstall(requiredAPIs)
 	end
 	return true
 end
-
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
-	"override"
+	"override",
+	"loglib"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
 	return
 end
-
+loglib.init(localDir.."logs/")
+------------------------------------------------------------------------
 override.hook(localDir.."libs/hooks/", {})
 
---Unload the dependencies afterwards
+------------------------------------------------------------------------
+loglib.shutdown()
 for i = 1, #requiredAPIs do
 	os.unloadAPI(requiredAPIs[i])
 end

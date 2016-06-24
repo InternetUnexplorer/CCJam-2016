@@ -1,34 +1,59 @@
 function init(dir)
-	logfile = fs.open(dir.. os.day()..".log", "a")
+	if not fs.isDir(dir) then
+		fs.makeDir(dir)
+	end
+	if not logfile then
+		logfile = assert(fs.open(dir.."latest"..".log", "w"))
+		_GLOBAL_LOGGER = getLogger("_GLOBAL_")
+		_GLOBAL_LOGGER:info("Logging initialized @"..os.time().."ms")
+	end
+end
+
+function getLogger(name)
+	return {
+		name=name,
+		logRaw=logRaw,
+		debug=debug,
+		info=info,
+		warn=warn,
+		error=error,
+		fatal=fatal
+	}
 end
 
 function shutdown()
-	logfile.close()
+	if logfile then
+		_GLOBAL_LOGGER:info("Logging shutting down...")
+		logfile.writeLine()
+		logfile.close()
+	end
 end
 
-function logRaw(level, msg)
-	logfile.writeLine(
-		"["..os.time().."]["..level.."] "..msg
-	)
-	logfile.flush()
+function logRaw(self, level, msg)
+	local prefix = "[" .. level .. "] " .. self.name .. " - "
+	local padding = "\n"..string.rep(" ", prefix:len())
+	if logfile then
+		logfile.writeLine( prefix .. msg:gsub("\n", padding))
+		logfile.flush()
+	end
 end
 
-function info(msg)
-	logRaw("INFO", msg)
+function debug(self, msg)
+	self:logRaw("DEBUG", msg)
 end
 
-function warn(msg)
-	logRaw("WARN", msg)
+function info(self, msg)
+	self:logRaw("INFO", msg)
 end
 
-function error(msg)
-	logRaw("ERROR", msg)
+function warn(self, msg)
+	self:logRaw("WARN", msg)
+end
+
+function error(self, msg)
+	self:logRaw("ERROR", msg)
 end
 
 function fatal(msg)
-	logRaw("$$ FATAL $$", msg)
-end
-
-function debug(msg)
-	logRaw("DEBUG", msg)
+	self:logRaw("$$ FATAL $$", msg)
 end

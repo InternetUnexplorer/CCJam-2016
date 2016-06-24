@@ -1,31 +1,38 @@
-function hookFile(file, old)
-	local env = {}
-	local ok, err = loadfile( file, env )
+function hookFile(file, old, logger)
+	local loaded, name = {}, fs.getName(file)
+	old[name] = {}
+	local ok, err = loadfile( file, loaded )
     if ok then
         local ok, err = pcall(ok)
         if not ok then
-            printError(err)
+            logger:fatal("Error loading hooks for '"..name.."':\n"..err)
             return false
         end
     else
-        printError(err)
+        logger:fatal("Error loading hooks for '"..name.."':\n"..err)
         return false
     end
-    local tAPI = {}
-    for k,v in pairs( env ) do
+    for k,v in pairs( loaded ) do
         if k ~= "_ENV" then
-            tAPI[k] =  v
+            logger:debug("Hooking function "..name.."."..k)
+            if _G[name][k] then
+            	old[name][k] = _G[name][k]
+            	_G[name][k] = function(...)
+            		v(old[name], ...)
+            	end
+            else
+            	logger:warn("Function "..name.."."..k.." does not hook into any function, skipping")
+            end
         end
-    end
-
-    _G[sName] = tAPI    
-    tAPIsLoading[sName] = nil
+    end  
     return true
 end
 
 function hook(dir, old)
+	local logger = loglib.getLogger("Hooks")
 	local files = fs.list(dir)
 	for i, file in pairs(files) do
-		hookFile(dir..file, old)
+		logger:info("Loading hooks for "..file)
+		hookFile(dir..file, old, logger)
 	end
 end
