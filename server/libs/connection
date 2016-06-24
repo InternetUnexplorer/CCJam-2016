@@ -8,10 +8,13 @@ local function getNewConnectionStuff()
 	    primeMod = 625210769
 	}
 	loglib.debug("Connection: Generating keys")
-	local mySecret = math.random(100000, 999999)
+	local mySecret1 = math.random(100000, 999999)
+	local mySecret2 = math.random(100000, 999999)
 	return {
-		mySecret = mySecret,
-		myPublic = modexp(public.base, mySecret, public.primeMod),
+		mySecret1 = mySecret1,
+		mySecret2 = mySecret2,
+		myPublic1 = modexp(public.base, mySecret1, public.primeMod),
+		myPublic2 = modexp(public.base, mySecret2, public.primeMod),
 		public = public
 	}
 end
@@ -36,14 +39,18 @@ function initiateHandshake(ID, timeout)
 			message = "ok:generate_keys",
 			public_base = dhke.public.base,
 			public_primeMod = dhke.public.primeMod,
-			public_key = dhke.myPublic
+			public_key1 = dhke.myPublic1,
+			public_key2 = dhke.myPublic2
 		}, "far:keys"
 	)
 	local response = assert( waitForMessage(ID, "far:keys", timeout) )
-	assert(response.message == "ok:exch_public" and response.public_key)
+	assert(response.message == "ok:exch_public" and response.public_key1 and response.public_key2)
 	loglib.debug("Connection: Generating shared key")
-	local sharedKey = modexp(response.public_key, dhke.mySecret, dhke.public.primeMod)
-	print( sharedKey )
+	local sharedKey = (modexp(response.public_key1, dhke.mySecret1, dhke.public.primeMod)..""..modexp(response.public_key2, dhke.mySecret2, dhke.public.primeMod)):sub(0, 16)
+	local key = {}
+	for i = 1, 16 do
+		key[i] = tonumber(sharedKey:sub(i, i))
+	end
 end
 
 function waitForMessage(ID, protocol, timeout)

@@ -22,9 +22,7 @@ requiredAPIs = {
 	"override",
 	"loglib",
 	"connection",
-	"conn/AES",
-	"conn/base64",
-	"conn/random"
+	"encryption"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then

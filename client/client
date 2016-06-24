@@ -10,7 +10,8 @@ end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"loglib",
-	"connection"
+	"connection",
+	"encryption"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
