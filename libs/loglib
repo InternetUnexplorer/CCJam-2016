@@ -1,0 +1,34 @@
+function init(dir)
+	logfile = fs.open(dir.. os.day()..".log", "a")
+end
+
+function shutdown()
+	logfile.close()
+end
+
+function logRaw(level, msg)
+	logfile.writeLine(
+		"["..os.time().."]["..level.."] "..msg
+	)
+	logfile.flush()
+end
+
+function info(msg)
+	logRaw("INFO", msg)
+end
+
+function warn(msg)
+	logRaw("WARN", msg)
+end
+
+function error(msg)
+	logRaw("ERROR", msg)
+end
+
+function fatal(msg)
+	logRaw("$$ FATAL $$", msg)
+end
+
+function debug(msg)
+	logRaw("DEBUG", msg)
+end
