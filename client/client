@@ -21,8 +21,12 @@ if not testInstall(requiredAPIs) then
 end
 loglib.init(localDir.."logs/")
 ------------------------------------------------------------------------
-loglib.info("Starting connection listener...")
-connection.connectionHandler(peripheral.wrap( "top" ))
+function remoteShell(ID)
+	connection.connectToServer(ID, 3)
+end
+------------------------------------------------------------------------
+rednet.open( "top" )
+remoteShell(7)
 ------------------------------------------------------------------------
 loglib.shutdown()
 for i = 1, #requiredAPIs do

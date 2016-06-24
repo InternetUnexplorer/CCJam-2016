@@ -1,18 +1,17 @@
 --Server connection stuff:
 
-local function getNewConnectionStuff()
-	local public = {
-	    base = 11,
-	    primeMod = 625210769
-	}
-	loglib.debug("Connection: Generating keys")
-	local mySecret = math.random(100000, 999999)
-	return {
-		mySecret = mySecret,
-		myPublic = modexp(public.base, mySecret, public.primeMod),
-		public = public
-	}
-end
+-- local function getNewConnectionStuff()
+-- 	local public = {
+-- 	    base = 11,
+-- 	    primeMod = 625210769
+-- 	}
+-- 	loglib.debug("Connection: Generating secret/public keys")
+-- 	return {
+-- 		mySecret = math.random(100000, 999999)
+-- 		myPublic = modexp(public.base, mySecret, public.primeMod),
+-- 		public = public
+-- 	}
+-- end
 
 function modexp(base, exponent, modulo)
     local remainder = base
@@ -25,30 +24,30 @@ function modexp(base, exponent, modulo)
     return remainder
 end
 
-function initiateHandshake(ID, timeout)
-	loglib.info("Initiating handshake with ID:"..ID)
-	local dhke = getNewConnectionStuff()
+function connectToServer(ID, timeout)
+	loglib.info("Connecting to server with ID:"..ID)
+	rednet.send(ID, "init_connection", "far:keys")
+	local response = assert( waitForMessage(ID, "far:keys", timeout) )
+	assert(response.message == "ok:generate_keys" and response.public_primeMod and response.public_base and response.public_key)
+	loglib.debug("Connection: Generating keys")
+	mySecret = math.random(100000, 999999)
+	myPublic = modexp(response.public_base, mySecret, response.public_primeMod)
 	loglib.debug("Connection: Sending keys")
 	rednet.send(ID, 
 		{
-			message = "ok:generate_keys",
-			public_base = dhke.public.base,
-			public_primeMod = dhke.public.primeMod,
-			public_key = dhke.myPublic
+			message = "ok:exch_public",
+			public_key = myPublic
 		}, "far:keys"
 	)
-	local response = assert( waitForMessage(ID, "far:keys", timeout) )
-	assert(response.message == "ok:exch_public" and response.public_key)
 	loglib.debug("Connection: Generating shared key")
-	local sharedKey = modexp(response.public_key, dhke.mySecret, dhke.public.primeMod)
+	local sharedKey = modexp(response.public_key, mySecret, response.public_primeMod)
 	print( sharedKey )
-	os.pullEvent("Key")
 end
 
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then loglib.error("Connection with client ID:"..ID.." timed out.")
+		if not senderId then loglib.error("Connection with server ID:"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then

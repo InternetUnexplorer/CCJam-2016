@@ -3,7 +3,7 @@ function init(dir)
 		fs.makeDir(dir)
 	end
 	if not logfile then
-		logfile = assert(fs.open(dir.."server-latest"..".log", "w"))
+		logfile = assert(fs.open(dir.."client-latest"..".log", "w"))
 		info("Logging initialized @"..math.floor(os.time()).."ms")
 	end
 end
