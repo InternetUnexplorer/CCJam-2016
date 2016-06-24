@@ -7,6 +7,16 @@ function testInstall(requiredAPIs)
 	end
 	return true
 end
+------------------------------------------------------------------------
+function connectionHandler()
+	while true do
+		local senderId, message = rednet.receive("far:keys", 1)
+		if message == "init_connection" then
+			connection.initiateHandshake(senderId, 3)
+		end
+	end
+end
+------------------------------------------------------------------------
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"override",
@@ -21,12 +31,9 @@ if not testInstall(requiredAPIs) then
 	return
 end
 loglib.init(localDir.."logs/")
-------------------------------------------------------------------------
---_OLD_ENV = {}
---override.hook(localDir.."libs/hooks/", _OLD_ENV, _G)
---override.unhook(_OLD_ENV)
-
-connection.benchmark("Hey, this is pretty neat!")
+loglib.info("Starting connection listener...")
+rednet.open( "top" )
+connectionHandler()
 ------------------------------------------------------------------------
 loglib.shutdown()
 for i = 1, #requiredAPIs do
