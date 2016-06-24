@@ -41,7 +41,7 @@ function connectToServer(ID, timeout)
 	)
 	loglib.debug("Connection: Generating shared key")
 	local sharedKey = modexp(response.public_key, mySecret, response.public_primeMod)
-	print( sharedKey )
+	loglib.info("Connection established!")
 end
 
 function waitForMessage(ID, protocol, timeout)

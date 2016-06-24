@@ -1,8 +1,10 @@
 --Server connection stuff:
 
+currentConnections = {}
+
 local function getNewConnectionStuff()
 	local public = {
-	    base = 11,
+	    base = 13,
 	    primeMod = 625210769
 	}
 	loglib.debug("Connection: Generating keys")
@@ -42,7 +44,6 @@ function initiateHandshake(ID, timeout)
 	loglib.debug("Connection: Generating shared key")
 	local sharedKey = modexp(response.public_key, dhke.mySecret, dhke.public.primeMod)
 	print( sharedKey )
-	os.pullEvent("Key")
 end
 
 function waitForMessage(ID, protocol, timeout)

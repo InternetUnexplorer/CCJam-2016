@@ -4,14 +4,11 @@ function init(dir)
 	end
 	if not logfile then
 		logfile = assert(fs.open(dir.."client-latest"..".log", "w"))
-		info("Logging initialized @"..math.floor(os.time()).."ms")
 	end
 end
 
 function shutdown()
 	if logfile then
-		info("Logging shutting down...")
-		logfile.writeLine()
 		logfile.close()
 	end
 end
@@ -29,7 +26,7 @@ function logRaw(level, msg)
 end
 
 function debug(msg)
-	logRaw("DEBUG", msg)
+	--logRaw("DEBUG", msg)
 end
 
 function info(msg)
