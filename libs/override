@@ -1,0 +1,31 @@
+function hookFile(file, old)
+	local env = {}
+	local ok, err = loadfile( file, env )
+    if ok then
+        local ok, err = pcall(ok)
+        if not ok then
+            printError(err)
+            return false
+        end
+    else
+        printError(err)
+        return false
+    end
+    local tAPI = {}
+    for k,v in pairs( env ) do
+        if k ~= "_ENV" then
+            tAPI[k] =  v
+        end
+    end
+
+    _G[sName] = tAPI    
+    tAPIsLoading[sName] = nil
+    return true
+end
+
+function hook(dir, old)
+	local files = fs.list(dir)
+	for i, file in pairs(files) do
+		hookFile(dir..file, old)
+	end
+end

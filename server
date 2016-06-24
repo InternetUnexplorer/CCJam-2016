@@ -1,0 +1,25 @@
+function testInstall(requiredAPIs)
+	for i = 1, #requiredAPIs do
+		if not os.loadAPI(localDir.."libs/"..requiredAPIs[i]) then
+			printError("Missing required dependency "..requiredAPIs[i])
+	    	return false
+		end
+	end
+	return true
+end
+
+localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
+requiredAPIs = {
+	"override"
+}
+--Test the installation first
+if not testInstall(requiredAPIs) then
+	return
+end
+
+override.hook(localDir.."libs/hooks/", {})
+
+--Unload the dependencies afterwards
+for i = 1, #requiredAPIs do
+	os.unloadAPI(requiredAPIs[i])
+end
