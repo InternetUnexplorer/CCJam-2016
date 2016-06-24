@@ -10,7 +10,9 @@ end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"override",
-	"loglib"
+	"loglib",
+	"encryption",
+	"connection"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
@@ -18,10 +20,11 @@ if not testInstall(requiredAPIs) then
 end
 loglib.init(localDir.."logs/")
 ------------------------------------------------------------------------
-_OLD_ENV = {}
-override.hook(localDir.."libs/hooks/", _OLD_ENV)
+--_OLD_ENV = {}
+--override.hook(localDir.."libs/hooks/", _OLD_ENV, _G)
 --override.unhook(_OLD_ENV)
 
+connection.benchmark("Hey, this is pretty neat!")
 ------------------------------------------------------------------------
 loglib.shutdown()
 for i = 1, #requiredAPIs do

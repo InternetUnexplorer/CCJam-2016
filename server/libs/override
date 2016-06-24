@@ -1,4 +1,4 @@
-function hookFile(file, old)
+function hookFile(file, old, new)
 	local loaded, name = {}, fs.getName(file)
 	old[name] = {}
 	local ok, err = loadfile( file, loaded )
@@ -12,13 +12,13 @@ function hookFile(file, old)
         loglib.fatal("Error loading hooks for '"..name.."':\n"..err)
         return false
     end
-    for k,v in pairs( _G[name] ) do
+    for k,v in pairs( new[name] ) do
         if k ~= "_ENV" then
-            old[name][k] = _G[name][k]
+            old[name][k] = new[name][k]
             if loaded[k] then
             	loglib.debug("Hooking function "..name.."."..k.."()")
-            	_G[name][k] = function (...)
-            		setfenv( loaded[k], _G )
+            	new[name][k] = function (...)
+            		setfenv( loaded[k], new )
            			loaded[k](old[name], ...)
             	end
             end
@@ -27,21 +27,21 @@ function hookFile(file, old)
     return true
 end
 
-function hook(dir, _OLD_ENV)
+function hook(dir, _OLD_ENV, _NEW_ENV)
 	local files = fs.list(dir)
 	loglib.info("Loading hooks...")
 	for i, file in pairs(files) do
-		hookFile(dir..file, _OLD_ENV)
+		hookFile(dir..file, _OLD_ENV, _NEW_ENV)
 	end
 end
 
-function unhook(_OLD_ENV)
+function unhook(_OLD_ENV, _NEW_ENV)
 	loglib.info("Unloading hooks...")
 	for k, v in pairs( _OLD_ENV ) do
 		for n, c in pairs( _OLD_ENV[k] ) do
-			if _G[k][n] ~= _OLD_ENV[k][n] then
+			if _NEW_ENV[k][n] ~= _OLD_ENV[k][n] then
 				loglib.debug("Unhooking "..k.."."..n.."()")
-				_G[k][n] = _OLD_ENV[k][n]
+				_NEW_ENV[k][n] = _OLD_ENV[k][n]
 			end
 		end
 	end
