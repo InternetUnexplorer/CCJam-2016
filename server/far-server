@@ -10,7 +10,7 @@ end
 function listAccounts()
 	local accounts = connection.loadAccounts()
 	for k, v in pairs( accounts ) do
-		print(" - "..k)
+		print(k)
 		local w, h = term.getCursorPos()
 		local mw, mh = term.getSize()
 		if h >= mh - 1 then
@@ -71,8 +71,12 @@ function changeAccountPassword(name, accounts)
 	print("Password changed.")
 end
 
-function startServer()
+function startServer(focus)
 	if not _G.FAR_SERVER._FAR_SERVER_RUNNING then
+		if not focus then
+			shell.run("bg /".. shell.getRunningProgram() .. " service start -focus")
+			return
+		end
 		local ok, err = pcall( runServer )
 		if not ok then
 			log.fatal(err)
@@ -81,20 +85,18 @@ function startServer()
 		log.shutdown()
 		_G.FAR_SERVER._FAR_SERVER_RUNNING = false
 	else
-		printError("Server is already running!")
+		printError("Server is already runinng!")
 	end
 end
 
 function runServer()
-	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getCurrent()
+	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getFocus()
 	_G.FAR_SERVER._KEEP_SERVER_ALIVE = true
-	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Starting")
 	log.init(_G._FAR_SERVER_ROOT.."logs/")
 	log.info("Server starting...")
 	local accounts = connection.loadAccounts()
 	log.info("Starting connection listener...")
 	rednet.open( "top" )
-	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Running")
 	while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
 		local senderId, message, protocol
 		parallel.waitForAny(
@@ -110,8 +112,14 @@ function runServer()
 end
 
 function serverStatus()
-	if not (_G.FAR_SERVER._FAR_SERVER_RUNNING and pcall(multishell.setFocus, _G.FAR_SERVER._FAR_SERVER_RUNNING)) then
+	if not (_G.FAR_SERVER._FAR_SERVER_RUNNING) then
 		print("Server is not running.")
+	else
+		if _G.FAR_SERVER._KEEP_SERVER_ALIVE then
+			print("Server is running and accepting connections.")
+		else
+			print("Server is either busy or exited unexpectedly. If this problem persists, try a restart.")
+		end
 	end
 end
 
@@ -143,27 +151,27 @@ end
 function printUsage( modifier )
 	print( "Usage:" )
 	if modifier == "service" then
-		print("server service start")
-		print(" - Starts the server")
-		print("server service stop")
+		print("far-server service start [-focus]")
+		print(" - Starts the server (If -focus then the server runs in the current shell session.)")
+		print("far-server service stop")
 		print(" - Stops the server")
-		print("server service status")
+		print("far-server service status")
 		print(" - Shows the status of the server")
 		print("server service restart")
 		print(" - Restarts the server")
 	end
 	if modifier == "users" then
-		print("server users list")
+		print("far-server users list")
 		print(" - Lists the user accounts on the server")
-		print("server users add <NAME>")
+		print("far-server users add <NAME>")
 		print(" - Adds a user account to the server")
-		print("server users passwd <NAME>")
+		print("far-server users passwd <NAME>")
 		print(" - Changes the password for user <NAME>")
-		print("server users remove <NAME>")
+		print("far-server users remove <NAME>")
 		print(" - Removes a user account from the server")
 	else
-		print("server service help")
-		print("server users help")
+		print("far-server service help")
+		print("far-server users help")
 	end
 end
 
@@ -194,6 +202,14 @@ end
 
 if args[1] == "service" then
 	if args[2] == "start" then
+		if args[3] then
+			if args[3] ~= "-focus" then
+				printError("Unknown flag: ".. args[3])
+				printUsage("service")
+			else
+				startServer(true)
+			end
+		end
 		startServer()
 	elseif args[2] == "status" then
 		serverStatus()

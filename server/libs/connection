@@ -9,7 +9,7 @@ function handle(ID, message, protocol, timeout)
 end
 
 function handleIncomingConnection(ID, timeout)
-	log.info("Incoming connection from /"..ID)
+	log.debug("Incoming connection from /"..ID)
 	local connection = {
 		client_id = ID,
 		authenticated = false,
@@ -53,7 +53,12 @@ function handleIncomingConnection(ID, timeout)
 		)
 	end
 	connection.authenticated = true
+	log.info("Launching shell session for /"..ID)
 	return connection
+end
+
+function launchTermSession()
+	-- body
 end
 
 function waitForMessage(ID, protocol, timeout)

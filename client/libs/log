@@ -22,7 +22,11 @@ function logRaw(level, msg)
 		logfile.writeLine(toPrint)
 		logfile.flush()
 	end
-	print(toPrint)
+	if level == "ERROR" then
+		printError(toPrint)
+	else
+		print(toPrint)
+	end
 end
 
 function debug(msg)
