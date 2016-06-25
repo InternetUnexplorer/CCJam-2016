@@ -1,17 +1,17 @@
 --Client connection stuff:
 
 function connectToServer(ID, timeout, username, passwordHashed)
-	loglib.info("Connecting to server with ID:"..ID)
+	log.info("Connecting to server with ID:"..ID)
 	rednet.send(ID, "init_connection", "far:init_connection")
 	local response = assert(waitForMessage(ID, "far:init_connection", timeout), "Connection timed out")
 	assert(response.sessionId and response.message:sub(1, 3) == "ok:")
-	loglib.debug("Assigned connection ID: "..response.sessionId)
+	log.debug("Assigned connection ID: "..response.sessionId)
 	local connection = {
 		server_id = ID,
 		authenticated = false,
 		session_id = response.sessionId
 	}
-	loglib.debug("Server response: "..response.message:sub(4))
+	log.debug("Server response: "..response.message:sub(4))
 	if response.message:sub(4) == "request_credentials" then
 		rednet.send(ID, 
 			{
@@ -22,18 +22,18 @@ function connectToServer(ID, timeout, username, passwordHashed)
 		response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout), "Connection timed out")
 	end
 	if response.message == "ok:welcome" then
-		loglib.debug("Server sent welcome message!")
+		log.debug("Server sent welcome message!")
 	elseif response.message == "err:bad_auth" then
-		loglib.debug("Connection failed: Bad login details")
+		log.debug("Connection failed: Bad login details")
 	else
-		loglib.debug("Connection failed: Unexpected message:\n"..response.message)
+		log.debug("Connection failed: Unexpected message:\n"..response.message)
 	end
 end
 
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then loglib.error("Connection with server ID:"..ID.." timed out.")
+		if not senderId then log.error("Connection with server ID:"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then

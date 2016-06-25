@@ -11,14 +11,14 @@ function testInstall(requiredAPIs)
 end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
-	"loglib",
+	"log",
 	"connection"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
 	return
 end
-loglib.init(localDir.."logs/")
+log.init(localDir.."logs/")
 ------------------------------------------------------------------------
 function remoteShell(ID)
 	connection.connectToServer(ID, _GLOBAL_TIMEOUT)
@@ -27,7 +27,4 @@ end
 rednet.open( "top" )
 remoteShell(7)
 ------------------------------------------------------------------------
-loglib.shutdown()
-for i = 1, #requiredAPIs do
-	os.unloadAPI(requiredAPIs[i])
-end
+log.shutdown()
