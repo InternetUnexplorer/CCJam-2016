@@ -76,6 +76,7 @@ function startServer()
 			log.fatal("--- Server Crashed ---")
 		end
 		log.shutdown()
+		_G.FAR_SERVER._FAR_SERVER_RUNNING = false
 	else
 		printError("Server is already running!")
 	end
@@ -215,11 +216,3 @@ else
 	printUsage()
 end
 ------------------------------------------------------------------------
-------------------------------------------------------------------------
-if not _G.FAR_SERVER._KEEP_SERVER_ALIVE then
-	for i = 1, #requiredAPIs do
-		pcall(os.unloadAPI, requiredAPIs[i])
-	end
-end
-------------------------------------------------------------------------
-_G.FAR_SERVER._FAR_SERVER_RUNNING = false
