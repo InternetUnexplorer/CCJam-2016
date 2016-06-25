@@ -39,6 +39,8 @@ function connectToServer(ID, timeout, username, passwordHashed)
 	end
 	if response.message == "ok:welcome" then
 		log.debug("Server sent welcome message!")
+		connection.authenticated = true
+		return connection
 	elseif response.message == "err:bad_auth" then
 		log.error("Connection failed: Bad login details")
 	else

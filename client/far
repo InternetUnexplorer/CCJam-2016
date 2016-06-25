@@ -24,7 +24,7 @@ log.init(localDir.."logs/")
 function remoteShell(ID)
 	local uname, ok
 	if ID:find("@") then
-		uname = ID:sub(0, ID:find("@") - 2)
+		uname = ID:sub(0, ID:find("@"))
 		ID = ID:sub(ID:find("@"))
 	end
 	ok, ID = pcall(tonumber, ID)

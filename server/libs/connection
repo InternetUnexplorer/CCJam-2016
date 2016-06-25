@@ -52,6 +52,8 @@ function handleIncomingConnection(ID, timeout)
 			}, "far:init_connection:"..connection.session_id
 		)
 	end
+	connection.authenticated = true
+	return connection
 end
 
 function waitForMessage(ID, protocol, timeout)
