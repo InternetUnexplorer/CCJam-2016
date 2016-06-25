@@ -1,6 +1,94 @@
 ------------------------------------------------------------------------
 _GLOBAL_TIMEOUT = 5
 ------------------------------------------------------------------------
+function loadAccounts()
+	local ok, accounts = pcall(json.decodeFromFile, localDir.."accounts.json")
+	if not (accounts and ok) then
+		log.info("accounts.json could not be loaded, making a new one")
+		local f = fs.open(localDir.."accounts.json", "w")
+		f.writeLine(json.encodePretty({}))
+		f.close()
+		return {}
+	end
+	return accounts
+end
+
+function storeAccounts(accounts)
+	log.info("Writing account details...")
+	local f = fs.open(localDir.."accounts.json", "w")
+	f.writeLine(json.encodePretty(accounts))
+	f.close()
+end
+
+function addAccount(username, password)
+	local accounts = loadAccounts()
+	log.info("Adding account: "..username)
+	log.debug("Hashing password...")
+	accounts[username] = hashpassword.sha1(password)
+	storeAccounts(accounts)
+end
+
+function removeAccount(name, accounts)
+	
+end
+
+function changeAccountPassword(name, accounts)
+	
+end
+
+function startServer()
+	if not _G.FAR_SERVER._FAR_SERVER_RUNNING then
+		local ok, err = pcall( runServer )
+		if not ok then
+			log.fatal(err)
+			log.fatal("--- Server Crashed ---")
+		end
+	else
+		printError("Server is already running!")
+	end
+end
+
+function runServer()
+	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getCurrent()
+	_G.FAR_SERVER._KEEP_SERVER_ALIVE = true
+	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Starting")
+	log.init(localDir.."logs/")
+	log.info("Server starting...")
+	local accounts = loadAccounts()
+	log.info("Starting connection listener...")
+	rednet.open( "top" )
+	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Running")
+	while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
+		local senderId, message, protocol
+		parallel.waitForAny(
+			function()
+				senderId, message, protocol = rednet.receive(_GLOBAL_TIMEOUT)
+			end,
+			wrap(os.pullEvent, "_KILL_FAR_SERVER")
+		)
+		if senderId then
+			connection.handle(senderId, message, protocol)
+		end
+	end
+end
+
+function serverStatus()
+	if not (_G.FAR_SERVER._FAR_SERVER_RUNNING and pcall(multishell.setFocus, _G.FAR_SERVER._FAR_SERVER_RUNNING)) then
+		print("Server is not running.")
+	end
+end
+
+function stopServer()
+	print("Stopping server...")
+	_G.FAR_SERVER._KEEP_SERVER_ALIVE = false
+	local originalTime = os.clock()
+	os.queueEvent( "_KILL_FAR_SERVER" )
+	while _G.FAR_SERVER._FAR_SERVER_RUNNING and ((os.clock() - originalTime) < _GLOBAL_TIMEOUT) do
+		sleep(0.05)
+	end
+	print("Server stopped.")
+end
+
 function testInstall(requiredAPIs)
 	for i = 1, #requiredAPIs do
 		if not os.loadAPI(localDir.."libs/"..requiredAPIs[i]) then
@@ -14,33 +102,66 @@ function wrap(f, ...)
       local args = { ... }
       return function() f(unpack(args)) end
 end
+
+function printUsage( modifier )
+	print( "Usage:" )
+	if modifier == "service" or not modifier then
+		print("server service start")
+		print(" - Starts the server")
+		print("server service stop")
+		print(" - Stops the server")
+		print("server service status")
+		print(" - Shows the status of the server")
+		print("server service restart")
+		print(" - Restarts the server")
+	end
+end
+
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"override",
-	"loglib",
+	"log",
 	"connection",
-	"encryption"
+	"json",
+	"hashpassword"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
 	return
 end
-loglib.init(localDir.."logs/")
-loglib.info("Starting connection listener...")
-rednet.open( "top" )
 ------------------------------------------------------------------------
-while true do
-	local senderId, message, protocol = rednet.receive(_GLOBAL_TIMEOUT)
-	if senderId then
-		connection.handle(senderId, message, protocol)
-	end
+if not _G.FAR_SERVER then
+	_G.FAR_SERVER = {}
 end
-------------------------------------------------------------------------
-loglib.shutdown()
-for i = 1, #requiredAPIs do
-	os.unloadAPI(requiredAPIs[i])
+local args = {...}
+if #args < 2 then
+	printError( "Not enough arguments" )
+	printUsage()
+	return
 end
 
-function doSomething(  )
-	term.setTextColor( colors.white )
+if args[1] == "service" then
+	if args[2] == "start" then
+		startServer()
+	elseif args[2] == "status" then
+		serverStatus()
+	elseif args[2] == "stop" then
+		stopServer()
+	elseif args[2] == "restart" then
+		stopServer()
+		startServer()
+	else
+		printError("Unknown action '"..args[2].."'")
+		printUsage("service")
+	end
+else
+	printUsage()
 end
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+log.shutdown()
+-- for i = 1, #requiredAPIs do
+-- 	os.unloadAPI(requiredAPIs[i])
+-- end
+------------------------------------------------------------------------
+_G.FAR_SERVER._FAR_SERVER_RUNNING = false

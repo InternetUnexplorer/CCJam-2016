@@ -1,0 +1,50 @@
+function init(dir)
+	if not fs.isDir(dir) then
+		fs.makeDir(dir)
+	end
+	if not logfile then
+		logfile = assert(fs.open(dir.."server-latest"..".log", "w"))
+		info("Logging initialized @"..math.floor(os.clock()).."s")
+	end
+end
+
+function shutdown()
+	if logfile then
+		info("Logging shutting down...")
+		logfile.writeLine()
+		logfile.close()
+	end
+	logfile = nil
+end
+
+function logRaw(level, msg)
+	local prefix = level
+	prefix = prefix .. string.rep(" ", 5 - prefix:len()) .. " - "
+	local padding = "\n"..string.rep(" ", prefix:len())
+	local toPrint = prefix .. msg:gsub("\n", padding)
+	if logfile then
+		logfile.writeLine(toPrint)
+		logfile.flush()
+	end
+	print(toPrint)
+end
+
+function debug(msg)
+	logRaw("DEBUG", msg)
+end
+
+function info(msg)
+	logRaw("INFO", msg)
+end
+
+function warn(msg)
+	logRaw("WARN", msg)
+end
+
+function error(msg)
+	logRaw("ERROR", msg)
+end
+
+function fatal(msg)
+	logRaw("FATAL", "$$$ "..msg)
+end

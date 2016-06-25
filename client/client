@@ -1,3 +1,5 @@
+_GLOBAL_TIMEOUT = 5
+------------------------------------------------------------------------
 function testInstall(requiredAPIs)
 	for i = 1, #requiredAPIs do
 		if not os.loadAPI(localDir.."libs/"..requiredAPIs[i]) then
@@ -10,8 +12,7 @@ end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"loglib",
-	"connection",
-	"encryption"
+	"connection"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
@@ -20,7 +21,7 @@ end
 loglib.init(localDir.."logs/")
 ------------------------------------------------------------------------
 function remoteShell(ID)
-	connection.connectToServer(ID, 3)
+	connection.connectToServer(ID, _GLOBAL_TIMEOUT)
 end
 ------------------------------------------------------------------------
 rednet.open( "top" )

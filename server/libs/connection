@@ -9,24 +9,28 @@ function handle(ID, message, protocol)
 end
 
 function handleIncomingConnection(ID, timeout)
-	loglib.info("Incoming connection from /"..ID)
-	connections[#connections + 1] = {
+	log.info("Incoming connection from /"..ID)
+	local connection = {
 		client_id = ID,
 		authenticated = false,
 		session_id = #connections + 1
 	}
+	connections[#connections + 1] = connection
 	rednet.send(ID, 
 		{
-			sessionId = #connections,
+			sessionId = connection.session_id,
 			message = "ok:request_credentials"
 		}, "far:init_connection"
 	)
+	response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout), "Connection with /"..ID.." timed out")
+	assert(response.username and response.passwd)
+	
 end
 
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then loglib.error("Connection with client ID:"..ID.." timed out.")
+		if not senderId then log.error("Connection with client ID:"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then
