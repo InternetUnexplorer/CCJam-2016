@@ -1,26 +1,29 @@
 ------------------------------------------------------------------------
 _GLOBAL_TIMEOUT = 5
 ------------------------------------------------------------------------
-function loadAccounts()
-	local ok, accounts = pcall(json.decodeFromFile, localDir.."accounts.json")
-	if not (accounts and ok) then
-		log.info("accounts.json could not be loaded, making a new one")
-		local f = fs.open(localDir.."accounts.json", "w")
-		f.writeLine(json.encodePretty({}))
-		f.close()
-		return {}
-	end
-	return accounts
-end
-
 function storeAccounts(accounts)
-	local f = fs.open(localDir.."accounts.json", "w")
+	local f = fs.open(_G._FAR_SERVER_ROOT.."accounts.json", "w")
 	f.writeLine(json.encodePretty(accounts))
 	f.close()
 end
 
+function listAccounts()
+	local accounts = connection.loadAccounts()
+	for k, v in pairs( accounts ) do
+		print(" - "..k)
+		local w, h = term.getCursorPos()
+		local mw, mh = term.getSize()
+		if h >= mh - 1 then
+			print("Press a key...")
+			os.pullEvent("key")
+			term.clear()
+			term.setCursorPos( 1, 1 )
+		end
+	end
+end
+
 function addAccount(username)
-	local accounts = loadAccounts()
+	local accounts = connection.loadAccounts()
 	if accounts[username] then
 		printError("A user with that name already exists.")
 		return
@@ -39,7 +42,7 @@ function addAccount(username)
 end
 
 function removeAccount(username)
-	local accounts = loadAccounts()
+	local accounts = connection.loadAccounts()
 	if not accounts[username] then
 		printError("User does not exist.")
 		return
@@ -50,7 +53,7 @@ function removeAccount(username)
 end
 
 function changeAccountPassword(name, accounts)
-	local accounts = loadAccounts()
+	local accounts = connection.loadAccounts()
 	if not accounts[username] then
 		printError("User does not exist.")
 		return
@@ -86,9 +89,9 @@ function runServer()
 	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getCurrent()
 	_G.FAR_SERVER._KEEP_SERVER_ALIVE = true
 	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Starting")
-	log.init(localDir.."logs/")
+	log.init(_G._FAR_SERVER_ROOT.."logs/")
 	log.info("Server starting...")
-	local accounts = loadAccounts()
+	local accounts = connection.loadAccounts()
 	log.info("Starting connection listener...")
 	rednet.open( "top" )
 	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Running")
@@ -101,7 +104,7 @@ function runServer()
 			wrap(os.pullEvent, "_KILL_FAR_SERVER")
 		)
 		if senderId then
-			connection.handle(senderId, message, protocol)
+			connection.handle(senderId, message, protocol, _GLOBAL_TIMEOUT)
 		end
 	end
 end
@@ -125,7 +128,7 @@ end
 
 function testInstall(requiredAPIs)
 	for i = 1, #requiredAPIs do
-		if not os.loadAPI(localDir.."libs/"..requiredAPIs[i]) then
+		if not os.loadAPI(_G._FAR_SERVER_ROOT.."libs/"..requiredAPIs[i]) then
 			printError("Missing required dependency "..requiredAPIs[i])
 	    	return false
 		end
@@ -139,7 +142,7 @@ end
 
 function printUsage( modifier )
 	print( "Usage:" )
-	if modifier == "service" or not modifier then
+	if modifier == "service" then
 		print("server service start")
 		print(" - Starts the server")
 		print("server service stop")
@@ -149,17 +152,22 @@ function printUsage( modifier )
 		print("server service restart")
 		print(" - Restarts the server")
 	end
-	if modifier == "users" or not modifier then
+	if modifier == "users" then
+		print("server users list")
+		print(" - Lists the user accounts on the server")
 		print("server users add <NAME>")
 		print(" - Adds a user account to the server")
 		print("server users passwd <NAME>")
 		print(" - Changes the password for user <NAME>")
 		print("server users remove <NAME>")
 		print(" - Removes a user account from the server")
+	else
+		print("server service help")
+		print("server users help")
 	end
 end
 
-localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
+_G._FAR_SERVER_ROOT = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"override",
 	"log",
@@ -177,7 +185,9 @@ if not _G.FAR_SERVER then
 end
 local args = {...}
 if #args < 2 then
-	printError( "Not enough arguments" )
+	if not args[1] == "help" then
+		printError( "Not enough arguments" )
+	end
 	printUsage()
 	return
 end
@@ -193,12 +203,18 @@ if args[1] == "service" then
 		stopServer()
 		startServer()
 	else
-		printError("Unknown action '"..args[2].."'")
+		if not args[2] == "help" then
+			printError( "Not enough arguments" )
+		end
 		printUsage("service")
 	end
 elseif args[1] == "users" then
-	if #args < 3 then
-		printError( "Not enough arguments" )
+	if args[2] == "list" then
+		listAccounts()
+	elseif #args < 3 then
+		if not args[2] == "help" then
+			printError( "Not enough arguments" )
+		end
 		printUsage("users")
 		return
 	end
@@ -208,7 +224,7 @@ elseif args[1] == "users" then
 		changeAccountPassword(args[3])
 	elseif args[2] == "remove" then
 		removeAccount(args[3])
-	else
+	elseif args[2] ~= "list" then
 		printError("Unknown action '"..args[2].."'")
 		printUsage("users")
 	end

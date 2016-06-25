@@ -2,9 +2,9 @@
 
 connections = {}
 
-function handle(ID, message, protocol)
+function handle(ID, message, protocol, timeout)
 	if protocol == "far:init_connection" and message == "init_connection" then
-		handleIncomingConnection(ID, _GLOBAL_TIMEOUT)
+		handleIncomingConnection(ID, timeout)
 	end
 end
 
@@ -16,25 +16,69 @@ function handleIncomingConnection(ID, timeout)
 		session_id = #connections + 1
 	}
 	connections[#connections + 1] = connection
-	rednet.send(ID, 
-		{
-			sessionId = connection.session_id,
-			message = "ok:request_credentials"
-		}, "far:init_connection"
-	)
-	response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout), "Connection with /"..ID.." timed out")
-	assert(response.username and response.passwd)
-	
+	local ok, err = pcall(function(timeout)
+		rednet.send(ID, 
+			{
+				sessionId = connection.session_id,
+				message = "ok:request_credentials"
+			}, "far:init_connection"
+		)
+		response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout * 10))
+		assert(response.username and response.passwd)
+		if loadAccounts()[response.username] == response.passwd then
+			rednet.send(ID, 
+				{
+					message = "ok:welcome"
+				}, "far:init_connection:"..connection.session_id
+			)
+		else
+			rednet.send(ID, 
+				{
+					message = "err:bad_auth"
+				}, "far:init_connection:"..connection.session_id
+			)
+		end
+	end
+	, timeout)
+	if not ok then
+		local s, i = err:find(":")
+		if i then
+			err = err:sub(i + 1)
+		end
+		log.warn("Connection failed:\n"..err)
+		rednet.send(ID, 
+			{
+				message = "err:response_err"
+			}, "far:init_connection:"..connection.session_id
+		)
+	end
 end
 
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then log.error("Connection with client ID:"..ID.." timed out.")
+		if not senderId then error("Connection with client /"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then
 			return message
 		end
 	end
+end
+
+function loadAccounts()
+	local ok, accounts = pcall(json.decodeFromFile, _G._FAR_SERVER_ROOT.."accounts.json")
+	if not (accounts and ok) then
+		log.info("accounts.json could not be loaded, making a new one")
+		local f = fs.open(localDir.."accounts.json", "w")
+		f.writeLine(json.encodePretty({}))
+		f.close()
+		return {}
+	end
+	return accounts
+end
+
+function wrap(f, ...)
+      local args = { ... }
+      return function() f(unpack(args)) end
 end

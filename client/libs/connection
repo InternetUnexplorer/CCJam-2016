@@ -13,31 +13,52 @@ function connectToServer(ID, timeout, username, passwordHashed)
 	}
 	log.debug("Server response: "..response.message:sub(4))
 	if response.message:sub(4) == "request_credentials" then
-		rednet.send(ID, 
-			{
-				username = username,
-				passwd = passwordHashed
-			}, "far:init_connection:"..connection.session_id
+		parallel.waitForAny(
+			function()
+				if not username then
+					write("Username: ")
+					username = read()
+				end
+				write("Password: ")
+				password = read("*")
+				local passwordHashed = hashpassword.sha1(password)
+				rednet.send(ID, 
+					{
+						username = username,
+						passwd = passwordHashed
+					}, "far:init_connection:"..connection.session_id
+				)
+				response = waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout)
+			end,
+			function()
+				response = waitForMessage(ID, "far:init_connection:"..connection.session_id)
+				printError("\nTimed out: Try typing a little faster next time.")
+				error()
+			end
 		)
-		response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout), "Connection timed out")
 	end
 	if response.message == "ok:welcome" then
 		log.debug("Server sent welcome message!")
 	elseif response.message == "err:bad_auth" then
-		log.debug("Connection failed: Bad login details")
+		log.error("Connection failed: Bad login details")
 	else
-		log.debug("Connection failed: Unexpected message:\n"..response.message)
+		log.error( "Connection failed.")
 	end
 end
 
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then log.error("Connection with server ID:"..ID.." timed out.")
+		if not senderId then log.error("Connection with server /"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then
 			return message
 		end
 	end
+end
+
+function wrap(f, ...)
+      local args = { ... }
+      return function() f(unpack(args)) end
 end

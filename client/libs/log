@@ -14,9 +14,9 @@ function shutdown()
 end
 
 function logRaw(level, msg)
-	local prefix = level
-	prefix = prefix .. string.rep(" ", 5 - prefix:len()) .. " - "
-	local padding = "\n"..string.rep(" ", prefix:len())
+	local prefix = ""
+	prefix = prefix .. "- "
+	local padding = "\n".."  "
 	local toPrint = prefix .. msg:gsub("\n", padding)
 	if logfile then
 		logfile.writeLine(toPrint)
@@ -26,7 +26,7 @@ function logRaw(level, msg)
 end
 
 function debug(msg)
-	logRaw("DEBUG", msg)
+	--logRaw("DEBUG", msg)
 end
 
 function info(msg)

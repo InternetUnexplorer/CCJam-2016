@@ -12,7 +12,8 @@ end
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"log",
-	"connection"
+	"connection",
+	"hashpassword"
 }
 --Test the installation first
 if not testInstall(requiredAPIs) then
@@ -21,10 +22,20 @@ end
 log.init(localDir.."logs/")
 ------------------------------------------------------------------------
 function remoteShell(ID)
-	connection.connectToServer(ID, _GLOBAL_TIMEOUT)
+	local uname, ok
+	if ID:find("@") then
+		uname = ID:sub(0, ID:find("@") - 2)
+		ID = ID:sub(ID:find("@"))
+	end
+	ok, ID = pcall(tonumber, ID)
+	if not ok then
+		printError("Invalid ID!")
+	end
+	connection.connectToServer(ID, _GLOBAL_TIMEOUT, uname)
 end
 ------------------------------------------------------------------------
 rednet.open( "top" )
-remoteShell(7)
+local args = {...}
+remoteShell(args[1])
 ------------------------------------------------------------------------
 log.shutdown()
