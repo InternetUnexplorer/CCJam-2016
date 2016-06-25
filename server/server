@@ -1,3 +1,6 @@
+------------------------------------------------------------------------
+_GLOBAL_TIMEOUT = 5
+------------------------------------------------------------------------
 function testInstall(requiredAPIs)
 	for i = 1, #requiredAPIs do
 		if not os.loadAPI(localDir.."libs/"..requiredAPIs[i]) then
@@ -7,16 +10,10 @@ function testInstall(requiredAPIs)
 	end
 	return true
 end
-------------------------------------------------------------------------
-function connectionHandler()
-	while true do
-		local senderId, message = rednet.receive("far:keys", 1)
-		if message == "init_connection" then
-			connection.initiateHandshake(senderId, 3)
-		end
-	end
+function wrap(f, ...)
+      local args = { ... }
+      return function() f(unpack(args)) end
 end
-------------------------------------------------------------------------
 localDir = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
 	"override",
@@ -31,9 +28,19 @@ end
 loglib.init(localDir.."logs/")
 loglib.info("Starting connection listener...")
 rednet.open( "top" )
-connectionHandler()
+------------------------------------------------------------------------
+while true do
+	local senderId, message, protocol = rednet.receive(_GLOBAL_TIMEOUT)
+	if senderId then
+		connection.handle(senderId, message, protocol)
+	end
+end
 ------------------------------------------------------------------------
 loglib.shutdown()
 for i = 1, #requiredAPIs do
 	os.unloadAPI(requiredAPIs[i])
+end
+
+function doSomething(  )
+	term.setTextColor( colors.white )
 end

@@ -1,56 +1,26 @@
 --Server connection stuff:
 
-currentConnections = {}
+connections = {}
 
-local function getNewConnectionStuff()
-	local public = {
-	    base = 13,
-	    primeMod = 625210769
-	}
-	loglib.debug("Connection: Generating keys")
-	local mySecret1 = math.random(100000, 999999)
-	local mySecret2 = math.random(100000, 999999)
-	return {
-		mySecret1 = mySecret1,
-		mySecret2 = mySecret2,
-		myPublic1 = modexp(public.base, mySecret1, public.primeMod),
-		myPublic2 = modexp(public.base, mySecret2, public.primeMod),
-		public = public
-	}
+function handle(ID, message, protocol)
+	if protocol == "far:init_connection" and message == "init_connection" then
+		handleIncomingConnection(ID, _GLOBAL_TIMEOUT)
+	end
 end
 
-function modexp(base, exponent, modulo)
-    local remainder = base
-    for i = 1, exponent-1 do
-        remainder = remainder * remainder
-        if remainder >= modulo then
-                remainder = remainder % modulo
-        end
-    end
-    return remainder
-end
-
-function initiateHandshake(ID, timeout)
-	loglib.info("Initiating handshake with ID:"..ID)
-	local dhke = getNewConnectionStuff()
-	loglib.debug("Connection: Sending keys")
+function handleIncomingConnection(ID, timeout)
+	loglib.info("Incoming connection from /"..ID)
+	connections[#connections + 1] = {
+		client_id = ID,
+		authenticated = false,
+		session_id = #connections + 1
+	}
 	rednet.send(ID, 
 		{
-			message = "ok:generate_keys",
-			public_base = dhke.public.base,
-			public_primeMod = dhke.public.primeMod,
-			public_key1 = dhke.myPublic1,
-			public_key2 = dhke.myPublic2
-		}, "far:keys"
+			sessionId = #connections,
+			message = "ok:request_credentials"
+		}, "far:init_connection"
 	)
-	local response = assert( waitForMessage(ID, "far:keys", timeout) )
-	assert(response.message == "ok:exch_public" and response.public_key1 and response.public_key2)
-	loglib.debug("Connection: Generating shared key")
-	local sharedKey = (modexp(response.public_key1, dhke.mySecret1, dhke.public.primeMod)..""..modexp(response.public_key2, dhke.mySecret2, dhke.public.primeMod)):sub(0, 16)
-	local key = {}
-	for i = 1, 16 do
-		key[i] = tonumber(sharedKey:sub(i, i))
-	end
 end
 
 function waitForMessage(ID, protocol, timeout)
@@ -63,27 +33,4 @@ function waitForMessage(ID, protocol, timeout)
 			return message
 		end
 	end
-end
-
-
-
-local random = math.random
-local key = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}
-
-local function gen_nonce(size)
-  local n = {}
-  for i = 1, size do n[#n+1] = random(0, 255) end
-  return n
-end
-
-local function encrypt(msg)
-  local nonce = gen_nonce(12)
-  local ctx = encryption.crypt(msg, key, nonce)
-  return { nonce, ctx }
-end
-
-local function decrypt(msg)
-  local nonce = msg[1]
-  local ctx = msg[2]
-  return encryption.crypt(ctx, key, nonce)
 end
