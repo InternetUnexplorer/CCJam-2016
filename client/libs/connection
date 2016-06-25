@@ -1,6 +1,6 @@
 --Client connection stuff:
 
-function connectToServer(ID, timeout, username, passwordHashed)
+function connectToServer(ID, timeout, username)
 	log.info("Connecting to server with ID:"..ID)
 	rednet.send(ID, "init_connection", "far:init_connection")
 	local response = assert(waitForMessage(ID, "far:init_connection", timeout), "Connection timed out")

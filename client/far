@@ -24,12 +24,15 @@ log.init(localDir.."logs/")
 function remoteShell(ID)
 	local uname, ok
 	if ID:find("@") then
-		uname = ID:sub(0, ID:find("@"))
+		uname = ID
 		ID = ID:sub(ID:find("@"))
+		uname = uname:sub(0, uname:len() - ID:len() - 1)
+		print( uname )
 	end
 	ok, ID = pcall(tonumber, ID)
 	if not ok then
 		printError("Invalid ID!")
+		return
 	end
 	connection.connectToServer(ID, _GLOBAL_TIMEOUT, uname)
 end
