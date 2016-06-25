@@ -74,7 +74,7 @@ end
 function startServer(focus)
 	if not _G.FAR_SERVER._FAR_SERVER_RUNNING then
 		if not focus then
-			shell.run("bg /".. shell.getRunningProgram() .. " service start -focus")
+			_G.FAR_SERVER._FAR_SERVER_RUNNING = shell.openTab("/".. shell.getRunningProgram(), " service start -focus")
 			return
 		end
 		local ok, err = pcall( runServer )
@@ -83,20 +83,27 @@ function startServer(focus)
 			log.fatal("--- Server Crashed ---")
 		end
 		log.shutdown()
-		_G.FAR_SERVER._FAR_SERVER_RUNNING = false
+		_G.FAR_SERVER._FAR_SERVER_RUNNING = nil
 	else
 		printError("Server is already runinng!")
 	end
 end
 
 function runServer()
-	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getFocus()
+	_G.FAR_SERVER._FAR_SERVER_RUNNING = multishell.getCurrent()
+	--Get rid of the 'press any key to continue'
+	local focus = multishell.getFocus()
+	multishell.setFocus(_G.FAR_SERVER._FAR_SERVER_RUNNING)
+	multishell.setFocus(focus)
+	-----
 	_G.FAR_SERVER._KEEP_SERVER_ALIVE = true
 	log.init(_G._FAR_SERVER_ROOT.."logs/")
+	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server - Starting")
 	log.info("Server starting...")
 	local accounts = connection.loadAccounts()
 	log.info("Starting connection listener...")
 	rednet.open( "top" )
+	local i = 0
 	while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
 		local senderId, message, protocol
 		parallel.waitForAny(
@@ -112,18 +119,15 @@ function runServer()
 end
 
 function serverStatus()
-	if not (_G.FAR_SERVER._FAR_SERVER_RUNNING) then
+	if not (_G.FAR_SERVER._FAR_SERVER_RUNNING and pcall(wrap(multishell.setFocus, _G.FAR_SERVER._FAR_SERVER_RUNNING))) then
 		print("Server is not running.")
-	else
-		if _G.FAR_SERVER._KEEP_SERVER_ALIVE then
-			print("Server is running and accepting connections.")
-		else
-			print("Server is either busy or exited unexpectedly. If this problem persists, try a restart.")
-		end
 	end
 end
 
 function stopServer()
+	if not _G.FAR_SERVER._KEEP_SERVER_ALIVE then
+		return printError( "Server is not running." )
+	end
 	print("Stopping server...")
 	_G.FAR_SERVER._KEEP_SERVER_ALIVE = false
 	local originalTime = os.clock()
@@ -209,14 +213,17 @@ if args[1] == "service" then
 			else
 				startServer(true)
 			end
+		else
+			startServer()
 		end
-		startServer()
 	elseif args[2] == "status" then
 		serverStatus()
 	elseif args[2] == "stop" then
 		stopServer()
 	elseif args[2] == "restart" then
-		stopServer()
+		if _G.FAR_SERVER._KEEP_SERVER_ALIVE then
+			stopServer()
+		end
 		startServer()
 	else
 		if not args[2] == "help" then
