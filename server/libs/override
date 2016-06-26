@@ -1,29 +1,3 @@
-function hookFile(file, loadInto, copyFrom)
-	local loaded, fileName = {}, fs.getName(file)
-	local ok, err = loadfile( file, loaded )
-	if ok then
-		local ok, err = pcall(ok)
-		if not ok then
-			log.fatal("Error loading hooks for '"..fileName.."':\n"..err)
-			return false
-		end
-	else
-		log.fatal("Error loading hooks for '"..fileName.."':\n"..err)
-		return false
-	end
-	for k,v in pairs( loaded[name] ) do
-		if k ~= "_ENV" then
-			log.debug("Hooking function "..name.."."..k.."()")
-			-- setfenv( loaded[k], new )
-			-- new[name][k] = function (...)
-			-- 	log.info(name)
-			-- 	loaded[k](old[name], connection, ...)
-			-- end
-		end
-	end  
-	return true
-end
-
 function hook(dir, loadInto, copyFrom)
 	local files = fs.list(dir)
 	log.info("Hooking term environment...")
@@ -31,8 +5,10 @@ function hook(dir, loadInto, copyFrom)
 		if fs.exists(dir..api) then
 			log.debug("Transposing "..api.." API")
 			local funcs = {}
-			loadInto[api] = loadInto[api] or {}
+			loadInto[api] = {}
+			copyFrom[api] = copyFrom[api] or {}
 			local ok, err = loadfile( dir..api, funcs )
+			setfenv( ok, loadInto )
 			if ok then
 				local ok, err = pcall(ok)
 				if not ok then
@@ -43,16 +19,42 @@ function hook(dir, loadInto, copyFrom)
 				log.error("Error loading functions for '"..api.."':\n"..err)
 				return false
 			end
-			for k, v in pairs( funcs ) do
-				if k ~= "_ENV" then
+			for k, v in pairs( copyFrom[api] ) do
+				--log.debug("Hooking function "..api.."."..k.."()")
+				loadInto[api][k] = loadstring(string.dump(v))
+				if funcs[k] and funcs[k] then
 					log.debug("Hooking function "..api.."."..k.."()")
 					loadInto[api][k] = function (...)
-					 	log.info(api)
-					 	funcs[k](loadInto[api], ...)
+					 	log.info(api.."."..k.."()")
+						funcs[k](loadFrom[api], ...)
 					end
-					setfenv( v, loadInto )
 				end
+				setfenv( loadInto[api][k], loadInto )
 			end
 		end
 	end
+end
+
+function copy (t) -- shallow-copy a table
+    if type(t) ~= "table" then return t end
+    local meta = getmetatable(t)
+    local target = {}
+    for k, v in pairs(t) do target[k] = v end
+    setmetatable(target, meta)
+    return target
+end
+
+function clone (t) -- deep-copy a table
+    if type(t) ~= "table" then return t end
+    local meta = getmetatable(t)
+    local target = {}
+    for k, v in pairs(t) do
+        if type(v) == "table" then
+            target[k] = clone(v)
+        else
+            target[k] = v
+        end
+    end
+    setmetatable(target, meta)
+    return target
 end

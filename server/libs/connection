@@ -89,9 +89,8 @@ function wrap(f, ...)
 end
 
 function launchTermSession(connection)
-	local _S_ENV = {}
+	local _S_ENV = override.copy(_G)
 	override.hook(_G._FAR_SERVER_ROOT.."libs/hooks/", _S_ENV, _G, connection)
-	-- local moddedShell = loadfile("/rom/programs/shell", nil, _S_ENV)
-	-- moddedShell()
-	print( "Done." )
+	local moddedShell = loadfile("/rom/programs/shell", nil, _S_ENV)
+	moddedShell()
 end
