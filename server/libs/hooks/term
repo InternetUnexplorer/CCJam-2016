@@ -1,3 +1,7 @@
-function clear(term, connection)
-	--term.clear()
+function clear(term)
+	print( "Error!" )
+end
+
+function isColour(term)
+	return term.isColor()
 end
