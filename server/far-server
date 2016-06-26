@@ -103,7 +103,7 @@ function runServer()
 	local accounts = connection.loadAccounts()
 	log.info("Starting connection listener...")
 	rednet.open( "top" )
-	local i = 0
+	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server")
 	while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
 		local senderId, message, protocol
 		parallel.waitForAny(
@@ -135,7 +135,6 @@ function stopServer()
 	while _G.FAR_SERVER._FAR_SERVER_RUNNING and ((os.clock() - originalTime) < _GLOBAL_TIMEOUT) do
 		sleep(0.05)
 	end
-	print("Server stopped.")
 end
 
 function testInstall(requiredAPIs)
@@ -224,6 +223,7 @@ if args[1] == "service" then
 		if _G.FAR_SERVER._KEEP_SERVER_ALIVE then
 			stopServer()
 		end
+		print("Starting server...")
 		startServer()
 	else
 		if not args[2] == "help" then

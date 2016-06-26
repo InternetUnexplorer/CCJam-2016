@@ -37,6 +37,7 @@ function handleIncomingConnection(ID, timeout)
 					message = "err:bad_auth"
 				}, "far:init_connection:"..connection.session_id
 			)
+			return
 		end
 	end
 	, timeout)
@@ -51,14 +52,11 @@ function handleIncomingConnection(ID, timeout)
 				message = "err:response_err"
 			}, "far:init_connection:"..connection.session_id
 		)
+		return
 	end
 	connection.authenticated = true
 	log.info("Launching shell session for /"..ID)
-	return connection
-end
-
-function launchTermSession()
-	-- body
+	launchTermSession(connection)
 end
 
 function waitForMessage(ID, protocol, timeout)
@@ -88,4 +86,12 @@ end
 function wrap(f, ...)
       local args = { ... }
       return function() f(unpack(args)) end
+end
+
+function launchTermSession(connection)
+	local _S_ENV = {}
+	override.hook(_G._FAR_SERVER_ROOT.."libs/hooks/", _S_ENV, _G, connection)
+	-- local moddedShell = loadfile("/rom/programs/shell", nil, _S_ENV)
+	-- moddedShell()
+	print( "Done." )
 end

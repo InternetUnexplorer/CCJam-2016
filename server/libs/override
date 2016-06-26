@@ -1,47 +1,57 @@
-function hookFile(file, old, new)
-	local loaded, name = {}, fs.getName(file)
-	old[name] = {}
+function hookFile(file, loadInto, copyFrom)
+	local loaded, fileName = {}, fs.getName(file)
 	local ok, err = loadfile( file, loaded )
-    if ok then
-        local ok, err = pcall(ok)
-        if not ok then
-            loglib.fatal("Error loading hooks for '"..name.."':\n"..err)
-            return false
-        end
-    else
-        loglib.fatal("Error loading hooks for '"..name.."':\n"..err)
-        return false
-    end
-    for k,v in pairs( new[name] ) do
-        if k ~= "_ENV" then
-            old[name][k] = new[name][k]
-            if loaded[k] then
-            	loglib.debug("Hooking function "..name.."."..k.."()")
-            	new[name][k] = function (...)
-            		setfenv( loaded[k], new )
-           			loaded[k](old[name], ...)
-            	end
-            end
-        end
-    end  
-    return true
-end
-
-function hook(dir, _OLD_ENV, _NEW_ENV)
-	local files = fs.list(dir)
-	loglib.info("Loading hooks...")
-	for i, file in pairs(files) do
-		hookFile(dir..file, _OLD_ENV, _NEW_ENV)
+	if ok then
+		local ok, err = pcall(ok)
+		if not ok then
+			log.fatal("Error loading hooks for '"..fileName.."':\n"..err)
+			return false
+		end
+	else
+		log.fatal("Error loading hooks for '"..fileName.."':\n"..err)
+		return false
 	end
+	for k,v in pairs( loaded[name] ) do
+		if k ~= "_ENV" then
+			log.debug("Hooking function "..name.."."..k.."()")
+			-- setfenv( loaded[k], new )
+			-- new[name][k] = function (...)
+			-- 	log.info(name)
+			-- 	loaded[k](old[name], connection, ...)
+			-- end
+		end
+	end  
+	return true
 end
 
-function unhook(_OLD_ENV, _NEW_ENV)
-	loglib.info("Unloading hooks...")
-	for k, v in pairs( _OLD_ENV ) do
-		for n, c in pairs( _OLD_ENV[k] ) do
-			if _NEW_ENV[k][n] ~= _OLD_ENV[k][n] then
-				loglib.debug("Unhooking "..k.."."..n.."()")
-				_NEW_ENV[k][n] = _OLD_ENV[k][n]
+function hook(dir, loadInto, copyFrom)
+	local files = fs.list(dir)
+	log.info("Hooking term environment...")
+	for api, funcs in pairs( copyFrom ) do
+		if fs.exists(dir..api) then
+			log.debug("Transposing "..api.." API")
+			local funcs = {}
+			loadInto[api] = loadInto[api] or {}
+			local ok, err = loadfile( dir..api, funcs )
+			if ok then
+				local ok, err = pcall(ok)
+				if not ok then
+					log.error("Error loading functions for '"..api.."':\n"..err)
+					return false
+				end
+			else
+				log.error("Error loading functions for '"..api.."':\n"..err)
+				return false
+			end
+			for k, v in pairs( funcs ) do
+				if k ~= "_ENV" then
+					log.debug("Hooking function "..api.."."..k.."()")
+					loadInto[api][k] = function (...)
+					 	log.info(api)
+					 	funcs[k](loadInto[api], ...)
+					end
+					setfenv( v, loadInto )
+				end
 			end
 		end
 	end
