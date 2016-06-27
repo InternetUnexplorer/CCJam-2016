@@ -90,12 +90,9 @@ end
 
 function launchTermSession(connection)
 	local faketerm = {}
-	local fakeEnv = shallowcopy(_G)
-	setmetatable( fakeEnv, getmetatable( _G ) )
 	local ok, err = loadfile( _G._FAR_SERVER_ROOT.."libs/hooks/term" )
-	-- setfenv( fakeEnv.term.native, fakeEnv )
 	if ok then
-		local ok, err = pcall(ok, term)
+		local ok, err = pcall(ok, term.native())
 		if not ok then
 			log.error("Error creating shell session:\n"..err)
 			return false
@@ -105,25 +102,5 @@ function launchTermSession(connection)
 		log.error("Error creating shell session:\n"..err)
 		return false
 	end
-	fakeEnv.term = faketerm
-	local mfunc = os.run
-	fakeEnv.os.run = function( env, ... )
-		for k,v in pairs(env) do fakeEnv[k] = v end
-		mfunc(fakeEnv, ... )
-	end
-	fakeEnv.os.run(fakeEnv, "/rom/programs/shell")
-end
-
-function shallowcopy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-        copy = {}
-        for orig_key, orig_value in pairs(orig) do
-            copy[orig_key] = orig_value
-        end
-    else -- number, string, boolean, etc
-        copy = orig
-    end
-    return copy
+	-- term.redirect(faketerm)
 end

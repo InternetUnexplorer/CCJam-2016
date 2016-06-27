@@ -1,48 +1,22 @@
-local args = {...}
+local native = (term.native and term.native()) or term
+local redirectTarget = native
+
 local term = {}
-local native = args[1]
-local redirectTarget = term
-
-local function wrap( term, _sFunction )
-	return function( ... )
-		return redirectTarget[ _sFunction ]( ... )
-	end
-end
-
+ 
 term.redirect = function( target )
-	if target == nil or type( target ) ~= "table" then
-		error( "Invalid redirect target", 2 )
-	end
-	-- if target == term then
- --        error( "term is not a recommended redirect target, try term.current() instead", 2 )
- --    end
-	for k,v in pairs( native ) do
-		if type( k ) == "string" and type( v ) == "function" then
-			if type( target[k] ) ~= "function" then
-				-- target[k] = function()
-					error( "Redirect object is missing method "..k..".", 2 )
-				-- end
-			end
-		end
-	end
-	local oldRedirectTarget = redirectTarget
-	redirectTarget = target
-	return oldRedirectTarget
+    native.redirect( target )
 end
-
+ 
 term.current = function()
     return redirectTarget
 end
-
+ 
 term.native = function()
-   return native
+    -- NOTE: please don't use this function unless you have to.
+    -- If you're running in a redirected or multitasked enviorment, term.native() will NOT be
+    -- the current terminal when your program starts up. It is far better to use term.current()
+    return native
 end
-
--- native.clear = function()
--- 	term.current().clear()
--- end
-
-----------------------
 
 term.isColor = function()
 	return native.isColor()
@@ -117,8 +91,7 @@ term.scroll = function( n )
 end
 
 term.clear = function()
-	print("I fixed it, I can now override functions in programs that run from shell!")
+	print(term.current() == native)
 end
 
-term.redirect( term )
 return term
