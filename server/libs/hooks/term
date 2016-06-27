@@ -1,7 +1,124 @@
-function clear(term)
-	print( "Error!" )
+local args = {...}
+local term = {}
+local native = args[1]
+local redirectTarget = term
+
+local function wrap( term, _sFunction )
+	return function( ... )
+		return redirectTarget[ _sFunction ]( ... )
+	end
 end
 
-function isColour(term)
+term.redirect = function( target )
+	if target == nil or type( target ) ~= "table" then
+		error( "Invalid redirect target", 2 )
+	end
+	-- if target == term then
+ --        error( "term is not a recommended redirect target, try term.current() instead", 2 )
+ --    end
+	for k,v in pairs( native ) do
+		if type( k ) == "string" and type( v ) == "function" then
+			if type( target[k] ) ~= "function" then
+				-- target[k] = function()
+					error( "Redirect object is missing method "..k..".", 2 )
+				-- end
+			end
+		end
+	end
+	local oldRedirectTarget = redirectTarget
+	redirectTarget = target
+	return oldRedirectTarget
+end
+
+term.current = function()
+    return redirectTarget
+end
+
+term.native = function()
+   return native
+end
+
+-- native.clear = function()
+-- 	term.current().clear()
+-- end
+
+----------------------
+
+term.isColor = function()
+	return native.isColor()
+end
+
+term.isColour = function()
 	return term.isColor()
 end
+
+term.setBackgroundColor = function( color )
+	native.setBackgroundColor( color )
+end
+
+term.setBackgroundColour = function( colour )
+	term.setBackgroundColor( color )
+end
+
+term.setTextColor = function( color )
+	native.setTextColor( color )
+end
+
+term.setTextColour = function( colour )
+	term.setTextColor( colour )
+end
+
+term.getTextColor = function()
+	return native.getTextColor()
+end
+
+term.getTextColour = function()
+	return term.getTextColor()
+end
+
+term.getBackgroundColor = function()
+	return native.getBackgroundColor()
+end
+
+term.getBackgroundColour = function()
+	return term.getBackgroundColor()
+end
+
+term.setCursorBlink = function( bool )
+	native.setCursorBlink(bool)
+end
+
+term.setCursorPos = function( x, y )
+	native.setCursorPos( x, y )
+end
+
+term.blit = function( text, fg, bg )
+	native.blit( text, fg, bg )
+end
+
+term.getSize = function()
+	return native.getSize()
+end
+
+term.write = function( string )
+	native.write( string )
+end
+
+term.clearLine = function()
+	native.clearLine()
+end
+
+term.getCursorPos = function()
+	return native.getCursorPos()
+end
+
+term.scroll = function( n )
+	native.scroll( n )
+end
+
+term.clear = function()
+	print("I fixed it, I can now override functions in programs that run from shell!")
+end
+
+term.redirect( term )
+return term

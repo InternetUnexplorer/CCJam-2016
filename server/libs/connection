@@ -91,35 +91,27 @@ end
 function launchTermSession(connection)
 	local faketerm = {}
 	local fakeEnv = shallowcopy(_G)
-	local ok, err = loadfile( _G._FAR_SERVER_ROOT.."libs/hooks/term", faketerm )
+	setmetatable( fakeEnv, getmetatable( _G ) )
+	local ok, err = loadfile( _G._FAR_SERVER_ROOT.."libs/hooks/term" )
+	-- setfenv( fakeEnv.term.native, fakeEnv )
 	if ok then
-		local ok, err = pcall(ok)
+		local ok, err = pcall(ok, term)
 		if not ok then
 			log.error("Error creating shell session:\n"..err)
 			return false
 		end
+		faketerm = err
 	else
 		log.error("Error creating shell session:\n"..err)
 		return false
 	end
-	for k, v in pairs( term ) do
-		log.debug("Hooking function term."..k.."()")
-		if faketerm[k] then
-			faketerm[k] = function(...)
-				v(term, ...)
-			end
-		else
-			faketerm[k] = term[k]
-		end
-	end
-	local newShell = loadfile( "/rom/programs/shell", fakeEnv)
-	setfenv( newShell, fakeEnv )
 	fakeEnv.term = faketerm
-	fakeEnv.term.current = function()
-		return faketerm
+	local mfunc = os.run
+	fakeEnv.os.run = function( env, ... )
+		for k,v in pairs(env) do fakeEnv[k] = v end
+		mfunc(fakeEnv, ... )
 	end
-	print( faketerm.setBackgroundColor )
-	newShell()
+	fakeEnv.os.run(fakeEnv, "/rom/programs/shell")
 end
 
 function shallowcopy(orig)
