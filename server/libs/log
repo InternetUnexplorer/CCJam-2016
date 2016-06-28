@@ -1,4 +1,5 @@
 function init(dir)
+	--term = term.current()
 	if not fs.isDir(dir) then
 		fs.makeDir(dir)
 	end
@@ -18,6 +19,7 @@ function shutdown()
 end
 
 function logRaw(level, msg)
+	msg = tostring( msg )
 	local prefix = level
 	prefix = prefix .. string.rep(" ", 5 - prefix:len()) .. " - "
 	local padding = "\n"..string.rep(" ", prefix:len())
@@ -26,11 +28,11 @@ function logRaw(level, msg)
 		logfile.writeLine(toPrint)
 		logfile.flush()
 	end
-	if level == "ERROR" or level == "FATAL" then
-		printError(toPrint)
-	else
-		print(toPrint)
-	end
+	-- if level == "ERROR" or level == "FATAL" then
+	-- 	printError(toPrint)
+	-- else
+	-- 	print(toPrint)
+	-- end
 end
 
 function debug(msg)

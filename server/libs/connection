@@ -1,10 +1,16 @@
 --Server connection stuff:
 
-connections = {}
+local connections = {}
 
 function handle(ID, message, protocol, timeout)
+	log.debug(protocol)
 	if protocol == "far:init_connection" and message == "init_connection" then
 		handleIncomingConnection(ID, timeout)
+	elseif protocol:sub(1, 7) == "far:qe:" then
+		local conn = connections[tonumber(protocol:sub(8))]
+		if conn then
+			conn.queueEvent(message)
+		end
 	end
 end
 
@@ -132,6 +138,24 @@ function launchTermSession(connection)
 		return response.data
 	end
 
-	os.run( _ENV, "/rom/programs/shell" )
+	connection.queueEvent = function( tEvent )
+		os.queueEvent( unpack( tEvent ) )
+	end
+	parallel.waitForAny(
+		function()
+			while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
+				senderId, message, protocol = rednet.receive(connection.timeout)
+				if senderId then
+					handle(senderId, message, protocol, connection.timeout)
+				end
+			end
+		end,
+		function ()
+			os.run(_ENV, "/rom/programs/shell")
+		end
+	)
+	connection.sendUpdate({
+		c = "close_natural"
+	})
 	return true
 end

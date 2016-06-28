@@ -9,7 +9,8 @@ function connectToServer(ID, timeout, username)
 	local connection = {
 		server_id = ID,
 		authenticated = false,
-		session_id = response.sessionId
+		session_id = response.sessionId,
+		alive = true
 	}
 	log.debug("Server response: "..response.message:sub(4))
 	if response.message:sub(4) == "request_credentials" then

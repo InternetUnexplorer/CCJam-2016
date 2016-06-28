@@ -21,6 +21,11 @@ if not testInstall(requiredAPIs) then
 end
 log.init(localDir.."logs/")
 ------------------------------------------------------------------------
+function wrap(f, ...)
+      local args = { ... }
+      return function() f(unpack(args)) end
+end
+
 function remoteShell(ID)
 	local uname, ok
 	if ID:find("@") then
@@ -35,9 +40,41 @@ function remoteShell(ID)
 		return
 	end
 	local connection = connection.connectToServer(ID, _GLOBAL_TIMEOUT, uname)
-	term.clear()
+	if connection then
+		parallel.waitForAny( wrap(runScreen, connection), wrap(runEvents, connection) )
+	end
+	print("Remote connection closed.")
+end
+
+function runEvents( connection )
+	local forwardEvents = {
+		char = true,
+		key = true,
+		key_up = true,
+	}
+	while connection.alive do
+		local name, p1, p2, p3, p4, p5 = os.pullEvent()
+		if forwardEvents[name] then
+			rednet.send(
+				connection.server_id,
+				{
+					name,
+					p1,
+					p2,
+					p3,
+					p4,
+					p5
+				},
+				"far:qe:"..connection.session_id
+			)
+		end
+	end
+end
+
+function runScreen( connection )
 	term.setCursorPos( 1, 1 )
-	while true do
+	term.clear()
+	while connection.alive do
 		senderId, message, protocol = rednet.receive(_GLOBAL_TIMEOUT)
 		if senderId then
 			if protocol == "far:su:"..connection.session_id then
@@ -61,10 +98,19 @@ function remoteShell(ID)
 					elseif message.t == 9 then
 						term.clear()
 					end
+				elseif message.c then
+					if message.c == "close_natural" then
+						disconnect(connection)
+					end
 				end
 			end
 		end
 	end
+end
+
+function disconnect(connection)
+	connection.alive = false
+	os.queueEvent("far_disconnect")
 end
 ------------------------------------------------------------------------
 rednet.open( "back" )

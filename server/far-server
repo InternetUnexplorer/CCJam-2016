@@ -146,6 +146,7 @@ function testInstall(requiredAPIs)
 	end
 	return true
 end
+
 function wrap(f, ...)
       local args = { ... }
       return function() f(unpack(args)) end

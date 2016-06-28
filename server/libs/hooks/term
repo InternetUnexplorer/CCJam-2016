@@ -2,9 +2,7 @@ local native = (term.native and term.native()) or term
 local redirectTarget = native
 local connection = ({...})[1]
 
-local bgColor = native.getBackgroundColor()
-local textColor = native.getTextColor()
-local cursorX, cursorY = 1, 1
+local win = window.create( native, 1, 1, connection.size_x, connection.size_y, false )
 
 local term = {}
  
@@ -32,7 +30,7 @@ term.isColour = function()
 end
 
 term.setBackgroundColor = function( color )
-	bgColor = color
+	win.setBackgroundColor( color )
 	connection.sendUpdate(
 		{
 			t = 1,
@@ -46,7 +44,7 @@ term.setBackgroundColour = function( colour )
 end
 
 term.setTextColor = function( color )
-	textColor = color
+	win.setTextColor( color )
 	connection.sendUpdate(
 		{
 			t = 2,
@@ -60,7 +58,7 @@ term.setTextColour = function( colour )
 end
 
 term.getTextColor = function()
-	return textColor
+	return win.getTextColor()
 end
 
 term.getTextColour = function()
@@ -68,7 +66,7 @@ term.getTextColour = function()
 end
 
 term.getBackgroundColor = function()
-	return bgColor
+	return win.getBackgroundColor()
 end
 
 term.getBackgroundColour = function()
@@ -76,6 +74,7 @@ term.getBackgroundColour = function()
 end
 
 term.setCursorBlink = function( bool )
+	win.setCursorBlink( bool )
 	connection.sendUpdate(
 		{
 			t = 3,
@@ -85,8 +84,7 @@ term.setCursorBlink = function( bool )
 end
 
 term.setCursorPos = function( x, y )
-	cursorX = x
-	cursorY = y
+	win.setCursorPos( x, y )
 	connection.sendUpdate(
 		{
 			t = 4,
@@ -97,6 +95,7 @@ term.setCursorPos = function( x, y )
 end
 
 term.blit = function( text, fg, bg )
+	win.blit( text, fg, bg )
 	connection.sendUpdate(
 		{
 			t = 5,
@@ -108,19 +107,22 @@ term.blit = function( text, fg, bg )
 end
 
 term.getSize = function()
-	return connection.size_x, connection.size_y
+	return win.getSize()
 end
 
 term.write = function( string )
+	win.write( string )
 	connection.sendUpdate(
 		{
 			t = 6,
 			s = string
 		}
 	)
+
 end
 
 term.clearLine = function()
+	win.clearLine()
 	connection.sendUpdate(
 		{
 			t = 7
@@ -129,10 +131,11 @@ term.clearLine = function()
 end
 
 term.getCursorPos = function()
-	return cursorX, cursorY
+	return win.getCursorPos()
 end
 
 term.scroll = function( n )
+	win.scroll( n )
 	connection.sendUpdate(
 		{
 			t = 8,
@@ -142,6 +145,7 @@ term.scroll = function( n )
 end
 
 term.clear = function()
+	win.clear()
 	connection.sendUpdate(
 		{
 			t = 9
