@@ -1,5 +1,10 @@
 local native = (term.native and term.native()) or term
 local redirectTarget = native
+local connection = ({...})[1]
+
+local bgColor = native.getBackgroundColor()
+local textColor = native.getTextColor()
+local cursorX, cursorY = 1, 1
 
 local term = {}
  
@@ -19,7 +24,7 @@ term.native = function()
 end
 
 term.isColor = function()
-	return native.isColor()
+	return connection.is_color
 end
 
 term.isColour = function()
@@ -27,7 +32,13 @@ term.isColour = function()
 end
 
 term.setBackgroundColor = function( color )
-	native.setBackgroundColor( color )
+	bgColor = color
+	connection.sendUpdate(
+		{
+			t = 1,
+			c = color
+		}
+	)
 end
 
 term.setBackgroundColour = function( colour )
@@ -35,7 +46,13 @@ term.setBackgroundColour = function( colour )
 end
 
 term.setTextColor = function( color )
-	native.setTextColor( color )
+	textColor = color
+	connection.sendUpdate(
+		{
+			t = 2,
+			c = color
+		}
+	)
 end
 
 term.setTextColour = function( colour )
@@ -43,7 +60,7 @@ term.setTextColour = function( colour )
 end
 
 term.getTextColor = function()
-	return native.getTextColor()
+	return textColor
 end
 
 term.getTextColour = function()
@@ -51,7 +68,7 @@ term.getTextColour = function()
 end
 
 term.getBackgroundColor = function()
-	return native.getBackgroundColor()
+	return bgColor
 end
 
 term.getBackgroundColour = function()
@@ -59,39 +76,77 @@ term.getBackgroundColour = function()
 end
 
 term.setCursorBlink = function( bool )
-	native.setCursorBlink(bool)
+	connection.sendUpdate(
+		{
+			t = 3,
+			b = bool
+		}
+	)
 end
 
 term.setCursorPos = function( x, y )
-	native.setCursorPos( x, y )
+	cursorX = x
+	cursorY = y
+	connection.sendUpdate(
+		{
+			t = 4,
+			x = x,
+			y = y
+		}
+	)
 end
 
 term.blit = function( text, fg, bg )
-	native.blit( text, fg, bg )
+	connection.sendUpdate(
+		{
+			t = 5,
+			tx = text,
+			f = fg,
+			b = bg
+		}
+	)
 end
 
 term.getSize = function()
-	return native.getSize()
+	return connection.size_x, connection.size_y
 end
 
 term.write = function( string )
-	native.write( string )
+	connection.sendUpdate(
+		{
+			t = 6,
+			s = string
+		}
+	)
 end
 
 term.clearLine = function()
-	native.clearLine()
+	connection.sendUpdate(
+		{
+			t = 7
+		}
+	)
 end
 
 term.getCursorPos = function()
-	return native.getCursorPos()
+	return cursorX, cursorY
 end
 
 term.scroll = function( n )
-	native.scroll( n )
+	connection.sendUpdate(
+		{
+			t = 8,
+			n = n
+		}
+	)
 end
 
 term.clear = function()
-	print(term.current() == native)
+	connection.sendUpdate(
+		{
+			t = 9
+		}
+	)
 end
 
 return term

@@ -102,7 +102,7 @@ function runServer()
 	log.info("Server starting...")
 	local accounts = connection.loadAccounts()
 	log.info("Starting connection listener...")
-	rednet.open( "top" )
+	rednet.open( "back" )
 	multishell.setTitle(_G.FAR_SERVER._FAR_SERVER_RUNNING, "FAR Server")
 	while _G.FAR_SERVER._KEEP_SERVER_ALIVE do
 		local senderId, message, protocol
@@ -180,7 +180,6 @@ end
 
 _G._FAR_SERVER_ROOT = "/"..fs.getDir(shell.getRunningProgram()).."/"
 requiredAPIs = {
-	"override",
 	"log",
 	"connection",
 	"json",

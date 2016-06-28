@@ -37,10 +37,23 @@ function connectToServer(ID, timeout, username)
 			end
 		)
 	end
-	if response.message == "ok:welcome" then
-		log.debug("Server sent welcome message!")
-		connection.authenticated = true
-		return connection
+	if response.message == "ok:get_client_details" then
+		local x, y = term.getSize()
+		rednet.send(ID, 
+			{
+				is_color = term.isColor(),
+				size_x = x,
+				size_y = y
+			}, "far:init_connection:"..connection.session_id
+		)
+		response = waitForMessage(ID, "far:init_connection:"..connection.session_id)
+		if response.message == "ok:welcome" then
+			log.debug("Server sent welcome message!")
+			connection.authenticated = true
+			return connection
+		else
+			log.error( "Connection failed.")
+		end
 	elseif response.message == "err:bad_auth" then
 		log.error("Connection failed: Bad login details")
 	else

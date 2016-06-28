@@ -1,4 +1,4 @@
-_GLOBAL_TIMEOUT = 5
+local _GLOBAL_TIMEOUT = 5
 ------------------------------------------------------------------------
 function testInstall(requiredAPIs)
 	for i = 1, #requiredAPIs do
@@ -34,10 +34,40 @@ function remoteShell(ID)
 		printError("Invalid ID!")
 		return
 	end
-	connection.connectToServer(ID, _GLOBAL_TIMEOUT, uname)
+	local connection = connection.connectToServer(ID, _GLOBAL_TIMEOUT, uname)
+	term.clear()
+	term.setCursorPos( 1, 1 )
+	while true do
+		senderId, message, protocol = rednet.receive(_GLOBAL_TIMEOUT)
+		if senderId then
+			if protocol == "far:su:"..connection.session_id then
+				if message.t then
+					if message.t == 1 then
+						term.setBackgroundColor( message.c )
+					elseif message.t == 2 then
+						term.setTextColor( message.c )
+					elseif message.t == 3 then
+						term.setCursorBlink( message.b )
+					elseif message.t == 4 then
+						term.setCursorPos( message.x, message.y )
+					elseif message.t == 5 then
+						term.blit( message.tx, message.f, message.b )
+					elseif message.t == 6 then
+						term.write( message.s )
+					elseif message.t == 7 then
+						term.clearLine()
+					elseif message.t == 8 then
+						term.scroll( message.n )
+					elseif message.t == 9 then
+						term.clear()
+					end
+				end
+			end
+		end
+	end
 end
 ------------------------------------------------------------------------
-rednet.open( "top" )
+rednet.open( "back" )
 local args = {...}
 remoteShell(args[1])
 ------------------------------------------------------------------------

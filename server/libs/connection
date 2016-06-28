@@ -13,7 +13,8 @@ function handleIncomingConnection(ID, timeout)
 	local connection = {
 		client_id = ID,
 		authenticated = false,
-		session_id = #connections + 1
+		session_id = #connections + 1,
+		timeout = timeout
 	}
 	connections[#connections + 1] = connection
 	local ok, err = pcall(function(timeout)
@@ -25,13 +26,7 @@ function handleIncomingConnection(ID, timeout)
 		)
 		response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout * 10))
 		assert(response.username and response.passwd)
-		if loadAccounts()[response.username] == response.passwd then
-			rednet.send(ID, 
-				{
-					message = "ok:welcome"
-				}, "far:init_connection:"..connection.session_id
-			)
-		else
+		if loadAccounts()[response.username] ~= response.passwd then
 			rednet.send(ID, 
 				{
 					message = "err:bad_auth"
@@ -39,6 +34,25 @@ function handleIncomingConnection(ID, timeout)
 			)
 			return
 		end
+		rednet.send(ID, 
+			{
+				message = "ok:get_client_details"
+			}, "far:init_connection:"..connection.session_id
+		)
+		response = assert(waitForMessage(ID, "far:init_connection:"..connection.session_id, timeout))
+		assert (response.is_color ~= nil and response.size_x and response.size_y)
+		if term.isColor() and response.is_color then
+			connection.is_color = true
+		else
+			connection.is_color = false
+		end
+		connection.size_x = response.size_x
+		connection.size_y = response.size_y
+		rednet.send(ID, 
+			{
+				message = "ok:welcome"
+			}, "far:init_connection:"..connection.session_id
+		)
 	end
 	, timeout)
 	if not ok then
@@ -62,7 +76,7 @@ end
 function waitForMessage(ID, protocol, timeout)
 	while true do
 		local senderId, message, protocol = rednet.receive(protocol, timeout)
-		if not senderId then error("Connection with client /"..ID.." timed out.")
+		if not senderId then --error("Connection with client /"..ID.." timed out.")
 			break
 		end
 		if senderId == ID then
@@ -83,16 +97,11 @@ function loadAccounts()
 	return accounts
 end
 
-function wrap(f, ...)
-      local args = { ... }
-      return function() f(unpack(args)) end
-end
-
 function launchTermSession(connection)
 	local faketerm = {}
 	local ok, err = loadfile( _G._FAR_SERVER_ROOT.."libs/hooks/term" )
 	if ok then
-		local ok, err = pcall(ok, term.native())
+		local ok, err = pcall(ok, connection)
 		if not ok then
 			log.error("Error creating shell session:\n"..err)
 			return false
@@ -102,5 +111,27 @@ function launchTermSession(connection)
 		log.error("Error creating shell session:\n"..err)
 		return false
 	end
-	-- term.redirect(faketerm)
+	term.redirect(faketerm)
+	--Make the utility functions:
+	connection.sendUpdate = function ( data )
+		rednet.send(
+			connection.client_id,
+			data,
+			"far:su:"..connection.session_id
+		)
+	end
+
+	connection.getResp = function ( req )
+		rednet.send(
+			connection.client_id,
+			data,
+			"far:gr:"..connection.session_id
+		)
+		response = assert(waitForMessage(connection.client_id, "far:sr:"..connection.session_id, connection.timeout), "Timed out.")
+		assert( response.data, "Malformed response" )
+		return response.data
+	end
+
+	os.run( _ENV, "/rom/programs/shell" )
+	return true
 end
