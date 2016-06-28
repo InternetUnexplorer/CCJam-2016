@@ -1,0 +1,160 @@
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+-- FAR -----------------------------------------------------------------
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+local global_timeout = 5
+local config_file_name = "/.settings"
+
+local connection
+local server_running = false
+------------------------------------------------------------------------
+-- REDIRECTED TERMINAL -------------------------------------------------
+------------------------------------------------------------------------
+local nativeTerm = (term.native and term.native()) or term
+
+local function getRTerm()
+	local rterm = {}
+	rterm.setBackgroundColor = function( color )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 1,
+				c = color
+			})
+		end
+	end
+
+	rterm.setBackgroundColour = function( colour )
+		rterm.setBackgroundColor( colour )
+	end
+
+	rterm.setTextColor = function( color )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 2,
+				c = color
+			})
+		end
+	end
+
+	rterm.setTextColour = function( colour )
+		rterm.setTextColor( colour )
+	end
+
+	rterm.setCursorBlink = function( bool )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 3,
+				b = bool
+			})
+		end
+	end
+
+	rterm.setCursorPos = function( x, y )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 4,
+				x = x,
+				y = y
+			})
+		end
+	end
+
+	rterm.blit = function( text, fg, bg )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 5,
+				tx = text,
+				f = fg,
+				b = bg
+			})
+		end
+	end
+
+	rterm.write = function( string )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 6
+				s = string
+			})
+		end
+	end
+
+	rterm.clearLine = function()
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 7
+			})
+		end
+	end
+
+	rterm.scroll = function( n )
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 8
+				n = n
+			})
+		end
+	end
+
+	rterm.clear = function()
+		if connection and connection.auth then
+			connection.sendUpdate({
+				t = 9
+			})
+		end
+	end
+
+	for name, func in pairs( nativeTerm ) do
+		if type(func) == "function" then
+			if rterm[name] then
+				rterm[name] = function( ... )
+					rterm[name]( ... )
+					func( ... )
+				end
+			else
+				rterm[name] = function( ... )
+					func( ... )
+				end
+			end
+		end
+	end
+	return rterm
+end
+
+local function runServer()
+	server_running = true
+	local oldterm = term.redirect( getRTerm() )
+	while server_running do
+		--Wait for a new connection
+		senderId, message, protocol = rednet.receive(global_timeout, "far:connect")
+		if senderId then
+			if type(message) == table and message.message = "init_connection" then
+				--Make a new connection
+				connection = {}
+				connection.client_id = senderId
+
+			end
+		end
+	end
+end
+
+local function handleNewConnection( senderId, message )
+
+end
+
+local function waitForClientMessage( protocol )
+	local time_to_response = os.clock() + global_timeout
+	while time_to_response > os.clock() do
+		local senderId, message, protocol = rednet.receive(protocol, time_to_response - os.clock())
+		if senderId == connection.client_id then
+			return message
+		else
+			rednet.send(
+				senderId,
+				{ message = "err:server_busy" },
+				protocol
+			)
+		end
+	end
+end
