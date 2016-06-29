@@ -3,18 +3,32 @@
 -- FAR -----------------------------------------------------------------
 ------------------------------------------------------------------------
 ------------------------------------------------------------------------
-local global_timeout = 5
+local global_timeout = 2
 local config_file_path = "/.settings"
+local primary_color = colors.yellow
 
 local connection
 local server_running = false
+local send_screen_next = true
+local last_sent_messages = 0
 ------------------------------------------------------------------------
 -- UTILITY FUNCTIONS ---------------------------------------------------
 ------------------------------------------------------------------------
 
-function wrap(f, ...)
+local function wrap(f, ...)
 	local args = { ... }
 	return function() f(unpack(args)) end
+end
+
+local function printPrimary( ... )
+	if term.isColor() then
+		local oldColor = term.getTextColor()
+		term.setTextColor( primary_color )
+		print( ... )
+		term.setTextColor( oldColor )
+	else
+		print( ... )
+	end
 end
 
 ------------------------------------------------------------------------
@@ -229,7 +243,7 @@ local function changePassword()
 	else
 		settings.set( "far.password", sha256( passwd2 ) )
 		settings.save( config_file_path )
-		print("Password changed.")
+		printPrimary("Password changed.")
 	end
 end
 
@@ -302,6 +316,7 @@ local function handleNewConnection( senderId, message )
 		--Client is compatible, send welcome
 		connection.auth = true
 		connection.use_color = term.isColor() and message.use_color
+		connection.screen_updates = {}
 		rednet.send(
 			senderId,
 			{ message = "ok:welcome" },
@@ -317,6 +332,15 @@ local function handleNewConnection( senderId, message )
 	end
 end
 
+local function addScreenUpdate( contents )
+	if send_screen_next and #connection.screen_updates == 0 then
+		send_screen_next = false
+		sendClientMessage( 1, { m = { contents } } )
+	else
+		table.insert( connection.screen_updates, contents)
+	end
+end
+
 local function runSession( getRTerm )
 	local oldterm = term.current()
 	term.redirect( getRTerm() )
@@ -327,9 +351,28 @@ local function runSession( getRTerm )
 			while server_running do
 				local message = waitForClientMessage()
 				if message and type( message ) == "table" and message.a then
-					if message.a == 2 then
+					if message.a == 1 then
+						if message.t == 0 then
+							for i = 1, last_sent_messages do
+								table.remove( connection.screen_updates, 1 )
+							end
+							last_sent_messages = 0
+							send_screen_next = true
+						end
+					elseif message.a == 2 then
 						os.queueEvent( unpack( message ) )
 					end
+				end
+			end
+		end,
+		function()
+			while server_running do
+				if send_screen_next and #connection.screen_updates ~= 0 then
+					last_sent_messages = #connection.screen_updates
+					sendClientMessage( 1, { m = connection.screen_updates } )
+					send_screen_next = false
+				else
+					coroutine.yield()
 				end
 			end
 		end,
@@ -387,33 +430,38 @@ local function disconnect()
 	connection = nil
 	term.clear()
 	term.setCursorPos( 1, 1 )
-	print("Disconnected from server.")
+	printPrimary("Disconnected from server.")
 end
 
 local function runMessages()
+	local color = term.isColor()
 	while connection do
 		local message = waitForServerMessage()
 		if message then
 			if message.a == 1 then -- Term update
-				if message.t == 1 then
-					term.setBackgroundColor( message.c )
-				elseif message.t == 2 then
-					term.setTextColor( message.c )
-				elseif message.t == 3 then
-					term.setCursorBlink( message.b )
-				elseif message.t == 4 then
-					term.setCursorPos( message.x, message.y )
-				elseif message.t == 5 then
-					term.blit( message.tx, message.f, message.b )
-				elseif message.t == 6 then
-					term.write( message.s )
-				elseif message.t == 7 then
-					term.clearLine()
-				elseif message.t == 8 then
-					term.scroll( message.n )
-				elseif message.t == 9 then
-					term.clear()
+				for i = 1, #message.m do
+					local message = message.m[i]
+					if message.t == 1 then
+						if color then term.setBackgroundColor( message.c ) end
+					elseif message.t == 2 then
+						if color then term.setTextColor( message.c ) end
+					elseif message.t == 3 then
+						term.setCursorBlink( message.b )
+					elseif message.t == 4 then
+						term.setCursorPos( message.x, message.y )
+					elseif message.t == 5 then
+						term.blit( message.tx, message.f, message.b )
+					elseif message.t == 6 then
+						term.write( message.s )
+					elseif message.t == 7 then
+						term.clearLine()
+					elseif message.t == 8 then
+						term.scroll( message.n )
+					elseif message.t == 9 then
+						term.clear()
+					end
 				end
+				sendServerMessage( 1, { t = 0 } )
 			elseif message.a == 3 then
 				if message.t == 1 then
 					return disconnect()
@@ -427,7 +475,14 @@ local function runEvents()
 	local forwardEvents = {
 		key = true,
 		char = true,
-		key_up = true
+		key_up = true,
+		paste = true,
+		mouse_click = true,
+		mouse_up = true,
+		mouse_scroll = true,
+		mouse_drag = true,
+		monitor_touch = true,
+		monitor_resize = true
 	}
 	while connection do
 		local name, p1, p2, p3, p4, p5, p6 = os.pullEvent()
@@ -458,7 +513,7 @@ local function connectToServer( id )
 	--Ask for a password
 	write("Password: ")
 	local password = read("*")
-	print("Connecting...")
+	printPrimary("Connecting...")
 	local password_hashed = sha256( password )
 	--Initiate connection
 	connection = {}
@@ -498,10 +553,11 @@ local cterm = term.current()
 local function getRTerm()
 	local term = term.current()
 	local rterm = {}
+
 	rterm.setBackgroundColor = function( color )
 		term.setBackgroundColor( color )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 1,
 				c = color
 			})
@@ -515,7 +571,7 @@ local function getRTerm()
 	rterm.setTextColor = function( color )
 		term.setTextColor( color )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 2,
 				c = color
 			})
@@ -529,7 +585,7 @@ local function getRTerm()
 	rterm.setCursorBlink = function( blink )
 		term.setCursorBlink( blink )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 3,
 				b = blink
 			})
@@ -539,7 +595,7 @@ local function getRTerm()
 	rterm.setCursorPos = function( x, y )
 		term.setCursorPos( x, y )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 4,
 				x = x,
 				y = y
@@ -550,7 +606,7 @@ local function getRTerm()
 	rterm.blit = function( text, textColor, backgroundColor )
 		term.blit( text, textColor, backgroundColor )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 5,
 				tx = text,
 				f = textColor,
@@ -562,7 +618,7 @@ local function getRTerm()
 	rterm.write = function( string )
 		term.write( string )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 6,
 				s = string
 			})
@@ -572,7 +628,7 @@ local function getRTerm()
 	rterm.clearLine = function()
 		term.clearLine()
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 7
 			})
 		end
@@ -581,7 +637,7 @@ local function getRTerm()
 	rterm.scroll = function( n )
 		term.scroll( n )
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 8,
 				n = n
 			})
@@ -591,7 +647,7 @@ local function getRTerm()
 	rterm.clear = function()
 		term.clear()
 		if connection and connection.auth then
-			sendClientMessage( 1, {
+			addScreenUpdate({
 				t = 9
 			})
 		end
