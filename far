@@ -9,123 +9,6 @@ local config_file_path = "/.settings"
 local connection
 local server_running = false
 ------------------------------------------------------------------------
--- REDIRECTED TERMINAL -------------------------------------------------
-------------------------------------------------------------------------
-local nativeTerm = (term.native and term.native()) or term
-
-local function getRTerm()
-	local term = term.current()
-	local rterm = {}
-	rterm.setBackgroundColor = function( color )
-		term.setBackgroundColor( color )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 1,
-				c = color
-			})
-		end
-	end
-
-	rterm.setBackgroundColour = function( colour )
-		term.setBackgroundColor( colour )
-	end
-
-	rterm.setTextColor = function( color )
-		term.setTextColor( color )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 2,
-				c = color
-			})
-		end
-	end
-
-	rterm.setTextColour = function( colour )
-		term.setTextColor( colour )
-	end
-
-	rterm.setCursorBlink = function( blink )
-		term.setCursorBlink( blink )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 3,
-				b = blink
-			})
-		end
-	end
-
-	rterm.setCursorPos = function( x, y )
-		term.setCursorPos( x, y )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 4,
-				x = x,
-				y = y
-			})
-		end
-	end
-
-	rterm.blit = function( text, textColor, backgroundColor )
-		term.blit( text, textColor, backgroundColor )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 5,
-				tx = text,
-				f = textColor,
-				b = backgroundColor
-			})
-		end
-	end
-
-	rterm.write = function( string )
-		term.write( string )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 6,
-				s = string
-			})
-		end
-	end
-
-	rterm.clearLine = function()
-		term.clearLine()
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 7
-			})
-		end
-	end
-
-	rterm.scroll = function( n )
-		term.scroll( n )
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 8,
-				n = n
-			})
-		end
-	end
-
-	rterm.clear = function()
-		term.clear()
-		if connection and connection.auth then
-			sendClientMessage( 1, {
-				t = 9
-			})
-		end
-	end
-
-	for name, func in pairs( nativeTerm ) do
-		if type(func) == "function" then
-			if not rterm[name] then
-				rterm[name] = func
-			end
-		end
-	end
-	return rterm
-end
-
-------------------------------------------------------------------------
 -- UTILITY FUNCTIONS ---------------------------------------------------
 ------------------------------------------------------------------------
 
@@ -350,50 +233,50 @@ local function changePassword()
 	end
 end
 
+------------------------------------------------------------------------
+-- PERIPHERAL FUNCTIONS ------------------------------------------------
+------------------------------------------------------------------------
+
+local function findAndOpenPeripheral()
+	local sides = {
+		"front",
+		"back",
+		"top",
+		"bottom",
+		"left",
+		"right"
+	}
+	for i = 1, #sides do
+		local side = sides[i]
+		if peripheral.isPresent( side ) and peripheral.getType( side ) == "modem" then
+			rednet.open( side )
+			return true
+		end
+	end
+	printError( "Could not find a modem." )
+	return false
+end
 
 ------------------------------------------------------------------------
 -- SERVER FUNCTIONS ----------------------------------------------------
 ------------------------------------------------------------------------
 
-local function startServer()
-	local oldterm = term.redirect( getRTerm() )
-	parallel.waitForAny(
-		wrap( shell.run, "/rom/programs/shell" ),
-		runServer
-	)
-	term.redirect( oldTerm )
-end
-
-local function runServer()
-	server_running = true
-	while server_running do
-		--Wait for a new connection
-		senderId, message, protocol = rednet.receive( global_timeout, "far" )
-		if senderId then
-			if type( message ) == table and message.message == "init_connection" then
-				--Handle the new connection. If it fails, reset.
-				if not handleNewConnection( senderId, message ) then
-					connection = nil
-				else
-					runSession()
-				end
-			end
-		end
-	end
-end
-
 local function waitForClientMessage()
-	local time_to_response = os.clock() + global_timeout
-	while time_to_response > os.clock() do
-		local senderId, message = rednet.receive("far", time_to_response - os.clock())
-		if senderId == connection.client_id then
-			return message
-		else
-			rednet.send(
-				senderId,
-				{ message = "err", error_message = "Server busy: Another client is currently connected." },
-				"far"
-			)
+	local timer = os.startTimer( global_timeout )
+	while true do
+		local event, senderId, message, protocol = os.pullEvent()
+		if event == "rednet_message" then
+			if senderId == connection.client_id and protocol == "far" then
+				return message
+			else
+				rednet.send(
+					senderId,
+					{ message = "err", error_message = "Server busy: Another client is currently connected." },
+					"far"
+				)
+			end
+		elseif event == "timer" and senderId == timer then
+			return
 		end
 	end
 end
@@ -414,22 +297,17 @@ local function handleNewConnection( senderId, message )
 	settings.load( config_file_path )
 	if settings.get( "far.password" ) == message.passwd then
 		--Check if the client is compatible
-		if term.isColor() and not message.use_color then
-			rednet.send(
-				senderId,
-				{ message = "err", error_message = "You need an advanced terminal to connect to this server." },
-				"far"
-			)
-		else
-			--Client is compatible, send welcome
-			connection.auth = true
-			rednet.send(
-				senderId,
-				{ message = "ok:welcome" },
-				"far"
-			)
-			return true --Otherwise the session will be discarded
-		end
+		--Nothing much to do here...
+			--Maybe check term size?
+		--Client is compatible, send welcome
+		connection.auth = true
+		connection.use_color = term.isColor() and message.use_color
+		rednet.send(
+			senderId,
+			{ message = "ok:welcome" },
+			"far"
+		)
+		return true --Otherwise the session will be discarded
 	else
 		rednet.send(
 			senderId,
@@ -439,27 +317,59 @@ local function handleNewConnection( senderId, message )
 	end
 end
 
-local function runSession()
+local function runSession( getRTerm )
+	local oldterm = term.current()
+	term.redirect( getRTerm() )
+	term.clear()
+	term.setCursorPos( 1, 1 )
+	parallel.waitForAny(
+		function()
+			while server_running do
+				local message = waitForClientMessage()
+				if message and type( message ) == "table" and message.a then
+					if message.a == 2 then
+						os.queueEvent( unpack( message ) )
+					end
+				end
+			end
+		end,
+		wrap( shell.run, "/rom/programs/shell" )
+	)
+	sendClientMessage( 3, { t = 1 } )
+	term.redirect( oldterm )
+end
+
+local function runServer( getRTerm )
+	server_running = true
 	while server_running do
-		local message = waitForClientMessage(global_timeout)
-		if message and type( message ) == "table" and message.t then
-			if message.t == 2 then
-				os.queueEvent( unpack( message ) )
+		--Wait for a new connection
+		local senderId, message, protocol = rednet.receive( "far", global_timeout )
+		if senderId then
+			if type( message ) == "table" and message.message == "init_connection" then
+				--Handle the new connection. If it fails, reset.
+				if not handleNewConnection( senderId, message ) then
+					connection = nil
+				else
+					runSession( getRTerm )
+				end
 			end
 		end
 	end
 end
-
 ------------------------------------------------------------------------
 -- CLIENT FUNCTIONS ----------------------------------------------------
 ------------------------------------------------------------------------
 
 local function waitForServerMessage()
-	local time_to_response = os.clock() + global_timeout
-	while time_to_response > os.clock() do
-		local senderId, message = rednet.receive("far", time_to_response - os.clock())
-		if senderId == connection.server_id then
-			return message
+	local timer = os.startTimer( global_timeout )
+	while true do
+		local event, senderId, message, protocol = os.pullEvent()
+		if event == "rednet_message" then
+			if senderId == connection.server_id and protocol == "far" then
+				return message
+			end
+		elseif event == "timer" and senderId == timer then
+			return
 		end
 	end
 end
@@ -471,6 +381,67 @@ local function sendServerMessage( type, message )
 		message,
 		"far"
 	)
+end
+
+local function disconnect()
+	connection = nil
+	term.clear()
+	term.setCursorPos( 1, 1 )
+	print("Disconnected from server.")
+end
+
+local function runMessages()
+	while connection do
+		local message = waitForServerMessage()
+		if message then
+			if message.a == 1 then -- Term update
+				if message.t == 1 then
+					term.setBackgroundColor( message.c )
+				elseif message.t == 2 then
+					term.setTextColor( message.c )
+				elseif message.t == 3 then
+					term.setCursorBlink( message.b )
+				elseif message.t == 4 then
+					term.setCursorPos( message.x, message.y )
+				elseif message.t == 5 then
+					term.blit( message.tx, message.f, message.b )
+				elseif message.t == 6 then
+					term.write( message.s )
+				elseif message.t == 7 then
+					term.clearLine()
+				elseif message.t == 8 then
+					term.scroll( message.n )
+				elseif message.t == 9 then
+					term.clear()
+				end
+			elseif message.a == 3 then
+				if message.t == 1 then
+					return disconnect()
+				end
+			end
+		end
+	end
+end
+
+local function runEvents()
+	local forwardEvents = {
+		key = true,
+		char = true,
+		key_up = true
+	}
+	while connection do
+		local name, p1, p2, p3, p4, p5, p6 = os.pullEvent()
+		if forwardEvents[name] then
+			sendServerMessage( 2, {
+				name,
+				p1,
+				p2,
+				p3,
+				p4,
+				p5
+			})
+		end
+	end
 end
 
 local function connectToServer( id )
@@ -509,7 +480,143 @@ local function connectToServer( id )
 		printError("Connection failed: Server sent unexpected message")
 		return false
 	end
+	print( "Connected to server!" )
 	connection.auth = true
+	term.clear()
+	term.setCursorPos( 1, 1 )
+	parallel.waitForAny(
+		runEvents,
+		runMessages
+	)
+end
+
+------------------------------------------------------------------------
+-- REDIRECTED TERMINAL -------------------------------------------------
+------------------------------------------------------------------------
+local cterm = term.current()
+
+local function getRTerm()
+	local term = term.current()
+	local rterm = {}
+	rterm.setBackgroundColor = function( color )
+		term.setBackgroundColor( color )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 1,
+				c = color
+			})
+		end
+	end
+
+	rterm.setBackgroundColour = function( colour )
+		rterm.setBackgroundColor( colour )
+	end
+
+	rterm.setTextColor = function( color )
+		term.setTextColor( color )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 2,
+				c = color
+			})
+		end
+	end
+
+	rterm.setTextColour = function( colour )
+		rterm.setTextColor( colour )
+	end
+
+	rterm.setCursorBlink = function( blink )
+		term.setCursorBlink( blink )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 3,
+				b = blink
+			})
+		end
+	end
+
+	rterm.setCursorPos = function( x, y )
+		term.setCursorPos( x, y )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 4,
+				x = x,
+				y = y
+			})
+		end
+	end
+
+	rterm.blit = function( text, textColor, backgroundColor )
+		term.blit( text, textColor, backgroundColor )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 5,
+				tx = text,
+				f = textColor,
+				b = backgroundColor
+			})
+		end
+	end
+
+	rterm.write = function( string )
+		term.write( string )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 6,
+				s = string
+			})
+		end
+	end
+
+	rterm.clearLine = function()
+		term.clearLine()
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 7
+			})
+		end
+	end
+
+	rterm.scroll = function( n )
+		term.scroll( n )
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 8,
+				n = n
+			})
+		end
+	end
+
+	rterm.clear = function()
+		term.clear()
+		if connection and connection.auth then
+			sendClientMessage( 1, {
+				t = 9
+			})
+		end
+	end
+
+	rterm.isColor = function()
+		if connection then
+			return connection.use_color
+		else
+			return term.isColor()
+		end
+	end
+
+	rterm.isColour = function()
+		return rterm.isColor()
+	end
+
+	for name, func in pairs( cterm ) do
+		if type(func) == "function" then
+			if not rterm[name] then
+				rterm[name] = func
+			end
+		end
+	end
+	return rterm
 end
 
 ------------------------------------------------------------------------
@@ -542,10 +649,14 @@ else
 			printError( "Missing Server ID" )
 			printUsage()
 		else
-			connectToServer( args[2] )
+			if findAndOpenPeripheral() then
+				connectToServer( args[2] )
+			end
 		end
 	elseif args[1] == "server" then
-		startServer()
+		if findAndOpenPeripheral() then
+			runServer( getRTerm )
+		end
 	elseif args[1] == "password" then
 		changePassword()
 	elseif args[1] ~= "help" then
