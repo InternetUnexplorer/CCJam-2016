@@ -9,7 +9,7 @@ local primary_color = colors.yellow
 
 local connection
 local server_running = false
-local send_screen_next = true
+local send_screen_next = false
 local last_sent_messages = 0
 ------------------------------------------------------------------------
 -- UTILITY FUNCTIONS ---------------------------------------------------
@@ -50,6 +50,9 @@ local function waitForAny( function1, ... )
 	while true do
 		for i = 1, #coroutines do
 			local r = coroutines[i]
+			if coroutine.status( r ) == "dead" then
+				return
+			end
 			local ok, err
 			if i == 1 or eventData[1] ~= "terminate" then
 				ok, err = coroutine.resume( r, unpack( eventData ) )
@@ -58,9 +61,6 @@ local function waitForAny( function1, ... )
 			end
 			if not ok then
 				--error( param, 0 )
-			end
-			if coroutine.status( r ) == "dead" then
-				return
 			end
 		end
 		eventData = { os.pullEventRaw() }
@@ -353,9 +353,10 @@ local function handleNewConnection( senderId, message )
 		connection.auth = true
 		connection.use_color = term.isColor() and message.use_color
 		connection.screen_updates = {}
+		local w, h = term.getSize()
 		rednet.send(
 			senderId,
-			{ message = "ok:welcome" },
+			{ message = "ok:welcome", screen_w = w, screen_h = h },
 			"far"
 		)
 		return true --Otherwise the session will be discarded
@@ -401,6 +402,8 @@ local function runSession( getRTerm )
 						break
 					end
 				end
+			else
+				sendClientMessage( 3, { t = 2 } )
 			end
 		end
 	end
@@ -509,8 +512,12 @@ local function runMessages()
 			elseif message.a == 3 then
 				if message.t == 1 then
 					return disconnected( "Disconnected from server." )
+				elseif message.t == 2 then
+					return disconnected( "Connection unstable, reconnecting..." )
 				end
 			end
+		else
+			sendServerMessage( 1, { t = 0 } )
 		end
 	end
 end
@@ -578,6 +585,9 @@ local function connectToServer( id )
 	connection.auth = true
 	term.clear()
 	term.setCursorPos( 1, 1 )
+	connection.screen_w = message.screen_w
+	connection.screen_h = message.screen_h
+	sendServerMessage( 1, { t = 0 } )
 	waitForAny(
 		runEvents,
 		runMessages
@@ -704,7 +714,7 @@ local function getRTerm()
 		return rterm.isColor()
 	end
 
-	for name, func in pairs( cterm ) do
+	for name, func in pairs( term ) do
 		if type(func) == "function" then
 			if not rterm[name] then
 				rterm[name] = func
