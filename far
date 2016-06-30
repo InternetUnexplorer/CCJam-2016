@@ -499,7 +499,21 @@ end
 local function scrollWindow( x, y )
 	if hScroll < 0 then x = 0 end
 	if vScroll < 0 then y = 0 end
-	print( x, y )
+	if x == 0 and y == 0 then return end
+	local w, h = old_term.getSize()
+	hScroll = hScroll + x
+	vScroll = vScroll + y
+	if hScroll > connection.screen_w - w then
+		hScroll = connection.screen_w - w
+	elseif hScroll < 0 then
+		hScroll = 0
+	end
+	if vScroll > connection.screen_h - h then
+		vScroll = connection.screen_h - h
+	elseif vScroll < 0 then
+		vScroll = 0
+	end
+	parentWindow.reposition( 1 - hScroll, 1 - vScroll )
 end
 
 local function waitForServerMessage()
@@ -620,6 +634,7 @@ local function runEvents()
 	}
 	while connection do
 		local eventData = { os.pullEventRaw() }
+		local ignoreEvent = false
 		if forwardEvents[eventData[1]] then
 			if translateEvents[eventData[1]] then
 				eventData[3] = eventData[3] + hScroll
@@ -639,12 +654,15 @@ local function runEvents()
 						x = x + 1
 					end
 					if eventData[2] == 208 then
-						y = y - 1
-					end
-					if eventData[2] == 200 then
 						y = y + 1
 					end
+					if eventData[2] == 200 then
+						y = y - 1
+					end
 					scrollWindow( x, y )
+					if not (x == 0 and y == 0) then
+						ignoreEvent = true
+					end
 				end
 			elseif eventData[1] == "key_up" then
 			if eventData[2] == 42 then lShiftPressed = false end
@@ -652,7 +670,9 @@ local function runEvents()
 				if eventData[2] == 29 then lCtrlPressed = false end
 				if eventData[2] == 157 then lCtrlPressed = false end
 			end
-			sendServerMessage( 2, eventData )
+			if not ignoreEvent then
+				sendServerMessage( 2, eventData )
+			end
 		end
 	end
 end
