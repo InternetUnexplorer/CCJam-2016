@@ -32,8 +32,8 @@ local function printPrimary( ... )
 end
 
 -- Like parallel.waitForAny() except it only forwards terminate events to function1
-local function waitForAny( function1, ... )
-	local functions = { function1, ... }
+local function waitForAny( eventPassthrough, ... )
+	local functions = { ... }
 
 	local coroutines = {}
 	
@@ -54,13 +54,19 @@ local function waitForAny( function1, ... )
 				return
 			end
 			local ok, err
-			if i == 1 or eventData[1] ~= "terminate" then
+			local ePass
+			if type( eventPassthrough[i] ) == "boolean" then
+				ePass = eventPassthrough[i]
+			elseif type( eventPassthrough[i] ) == "function" then
+				ePass = eventPassthrough[i]()
+			end
+			if ePass or eventData[1] ~= "terminate" then
 				ok, err = coroutine.resume( r, unpack( eventData ) )
 			else
 				ok, err = coroutine.resume( r )
 			end
 			if not ok then
-				--error( param, 0 )
+				error( param, 0 )
 			end
 		end
 		eventData = { os.pullEventRaw() }
@@ -347,19 +353,24 @@ local function handleNewConnection( senderId, message )
 	settings.load( config_file_path )
 	if settings.get( "far.password" ) == message.passwd then
 		--Check if the client is compatible
-		--Nothing much to do here...
-			--Maybe check term size?
-		--Client is compatible, send welcome
-		connection.auth = true
-		connection.use_color = term.isColor() and message.use_color
-		connection.screen_updates = {}
-		local w, h = term.getSize()
-		rednet.send(
-			senderId,
-			{ message = "ok:welcome", screen_w = w, screen_h = h },
-			"far"
-		)
-		return true --Otherwise the session will be discarded
+		if term.native().isColor() and not message.use_color then
+			rednet.send(
+				senderId,
+				{ message = "err", error_message = "This computer uses color, you need a color monitor to connect." },
+				"far"
+			)
+		else
+			connection.auth = true
+			connection.use_color = term.native().isColor()
+			connection.screen_updates = {}
+			local w, h = term.getSize()
+			rednet.send(
+				senderId,
+				{ message = "ok:welcome", screen_w = w, screen_h = h },
+				"far"
+			)
+			return true --Otherwise the session will be discarded
+		end
 	else
 		rednet.send(
 			senderId,
@@ -378,21 +389,27 @@ local function addScreenUpdate( contents )
 	end
 end
 
-local function runSession( getRTerm )
+local function runSession( rterm )
 	local oldterm = term.current()
-	term.redirect( getRTerm() )
+	term.redirect( rterm )
 	term.clear()
 	term.setCursorPos( 1, 1 )
 	local function handleMessages()
+		local timed_out = false
 		while server_running do
 			local message = waitForClientMessage()
 			if message and type( message ) == "table" and message.a then
+				timed_out = false
 				if message.a == 1 then
 					if message.t == 0 then
-						for i = 1, last_sent_messages do
-							table.remove( connection.screen_updates, 1 )
+						if last_sent_messages > 0 then
+							for i = 1, last_sent_messages do
+								table.remove( connection.screen_updates, 1 )
+							end
+							last_sent_messages = 0
+						else
+							sendClientMessage( 3, { t = 0 } )
 						end
-						last_sent_messages = 0
 						send_screen_next = true
 					end
 				elseif message.a == 2 then
@@ -403,7 +420,12 @@ local function runSession( getRTerm )
 					end
 				end
 			else
-				sendClientMessage( 3, { t = 2 } )
+				if timed_out then
+					sendClientMessage( 3, { t = 2 } )
+					return
+				else
+					timed_out = true
+				end
 			end
 		end
 	end
@@ -419,13 +441,17 @@ local function runSession( getRTerm )
 		end
 	end
 	
-	waitForAny( wrap( shell.run, "/rom/programs/shell" ), handleMessages, handleScreenBuffer )
+	waitForAny( { true }, wrap( shell.run, "/rom/programs/shell" ), handleMessages, handleScreenBuffer )
 	sendClientMessage( 3, { t = 1 } )
+	connection = nil
 	term.redirect( oldterm )
 end
 
 local function runServer( getRTerm )
 	server_running = true
+	term.clear()
+	term.setCursorPos( 1, 1 )
+	print("No client is connected.")
 	while server_running do
 		--Wait for a new connection
 		local senderId, message, protocol = rednet.receive( "far", global_timeout )
@@ -435,7 +461,10 @@ local function runServer( getRTerm )
 				if not handleNewConnection( senderId, message ) then
 					connection = nil
 				else
-					runSession( getRTerm )
+					runSession( getRTerm() )
+					term.clear()
+					term.setCursorPos( 1, 1 )
+					print("No client is connected.")
 				end
 			end
 		end
@@ -444,6 +473,31 @@ end
 ------------------------------------------------------------------------
 -- CLIENT FUNCTIONS ----------------------------------------------------
 ------------------------------------------------------------------------
+
+local tDisp
+local scrH = 0
+local scrY = 0
+local oldterm
+
+local function setupDisplayWindow()
+	local w, h = term.getSize()
+	tDisp.hScrollBar = connection.screen_w > w
+	tDisp.vScrollBar = connection.screen_h > h
+	local ww
+	if vScrollBar then ww = w - 1 else ww = w end
+	local wh
+	if hScrollBar then wh = h - 1 else wh = h end
+	olterm = term.current()
+	tDisp.parent = window.create( term, 1, 1, ww, wh, true )
+	tDisp.simulated = window.create( tDisp.parent, 1, 1, connection.screen_w, connection.screen_h, true )
+	term.redirect( tWindow )
+end
+
+local function redrawDisplayWindow()
+	-- if term.current() ~= oldterm then term.redirect( oldterm ) end
+
+	-- term.redirect( tWindow )
+end
 
 local function waitForServerMessage()
 	local timer = os.startTimer( global_timeout )
@@ -470,6 +524,9 @@ end
 
 local function disconnected( message )
 	connection = nil
+	term.setCursorBlink( false )
+	term.redirect( oldterm )
+	tDisp = nil
 	term.clear()
 	term.setCursorPos( 1, 1 )
 	printPrimary( message )
@@ -482,9 +539,11 @@ end
 
 local function runMessages()
 	local color = term.isColor()
+	local timed_out = false
 	while connection do
 		local message = waitForServerMessage()
 		if message then
+			timed_out = false
 			if message.a == 1 then -- Term update
 				for i = 1, #message.m do
 					local message = message.m[i]
@@ -513,10 +572,16 @@ local function runMessages()
 				if message.t == 1 then
 					return disconnected( "Disconnected from server." )
 				elseif message.t == 2 then
-					return disconnected( "Connection unstable, reconnecting..." )
+					return disconnected( "Connection to server lost." )
 				end
 			end
 		else
+			if not timed_out then
+				timed_out = true
+			else
+				sendServerMessage( 3, { t = 1 } )
+				return disconnected( "Connection to server lost." )
+			end
 			sendServerMessage( 1, { t = 0 } )
 		end
 	end
@@ -587,8 +652,11 @@ local function connectToServer( id )
 	term.setCursorPos( 1, 1 )
 	connection.screen_w = message.screen_w
 	connection.screen_h = message.screen_h
+	setupDisplayWindow()
+	redrawDisplayWindow()
 	sendServerMessage( 1, { t = 0 } )
 	waitForAny(
+		{ true }, 
 		runEvents,
 		runMessages
 	)
@@ -605,12 +673,10 @@ local function getRTerm()
 
 	rterm.setBackgroundColor = function( color )
 		term.setBackgroundColor( color )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 1,
-				c = color
-			})
-		end
+		addScreenUpdate({
+			t = 1,
+			c = color
+		})
 	end
 
 	rterm.setBackgroundColour = function( colour )
@@ -619,12 +685,10 @@ local function getRTerm()
 
 	rterm.setTextColor = function( color )
 		term.setTextColor( color )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 2,
-				c = color
-			})
-		end
+		addScreenUpdate({
+			t = 2,
+			c = color
+		})
 	end
 
 	rterm.setTextColour = function( colour )
@@ -633,73 +697,59 @@ local function getRTerm()
 
 	rterm.setCursorBlink = function( blink )
 		term.setCursorBlink( blink )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 3,
-				b = blink
-			})
-		end
+		addScreenUpdate({
+			t = 3,
+			b = blink
+		})
 	end
 
 	rterm.setCursorPos = function( x, y )
 		term.setCursorPos( x, y )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 4,
-				x = x,
-				y = y
-			})
-		end
+		addScreenUpdate({
+			t = 4,
+			x = x,
+			y = y
+		})
 	end
 
 	rterm.blit = function( text, textColor, backgroundColor )
 		term.blit( text, textColor, backgroundColor )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 5,
-				tx = text,
-				f = textColor,
-				b = backgroundColor
-			})
-		end
+		addScreenUpdate({
+			t = 5,
+			tx = text,
+			f = textColor,
+			b = backgroundColor
+		})
 	end
 
 	rterm.write = function( string )
 		term.write( string )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 6,
-				s = string
-			})
-		end
+		addScreenUpdate({
+			t = 6,
+			s = string
+		})
 	end
 
 	rterm.clearLine = function()
 		term.clearLine()
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 7
-			})
-		end
+		addScreenUpdate({
+			t = 7
+		})
 	end
 
 	rterm.scroll = function( n )
 		term.scroll( n )
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 8,
-				n = n
-			})
-		end
+		addScreenUpdate({
+			t = 8,
+			n = n
+		})
 	end
 
 	rterm.clear = function()
 		term.clear()
-		if connection and connection.auth then
-			addScreenUpdate({
-				t = 9
-			})
-		end
+		addScreenUpdate({
+			t = 9
+		})
 	end
 
 	rterm.isColor = function()
