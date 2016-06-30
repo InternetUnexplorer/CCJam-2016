@@ -31,42 +31,6 @@ local function printPrimary( ... )
 	end
 end
 
--- Like parallel.waitForAny() except it only forwards terminate events to function1
-local function waitForAny( function1, ... )
-	local functions = { function1, ... }
-
-	local coroutines = {}
-	
-	for i = 1, #functions do
-		if type( functions[i] ) ~= "function" then
-			error( "Expected function, got "..type( functions[i] ), 3 )
-		end
-		table.insert( coroutines, coroutine.create( functions[i] ) )
-	end
-
-	local eventData = {}
-	local filters = {}
-
-	while true do
-		for i = 1, #coroutines do
-			local r = coroutines[i]
-			local ok, err
-			if i == 1 or eventData[1] ~= "terminate" then
-				ok, err = coroutine.resume( r, unpack( eventData ) )
-			else
-				ok, err = coroutine.resume( r )
-			end
-			if not ok then
-				--error( param, 0 )
-			end
-			if coroutine.status( r ) == "dead" then
-				return
-			end
-		end
-		eventData = { os.pullEventRaw() }
-	end
-end
-
 ------------------------------------------------------------------------
 -- PASSWORD HASHING ----------------------------------------------------
 ------------------------------------------------------------------------
@@ -303,7 +267,7 @@ local function findAndOpenPeripheral()
 			return true
 		end
 	end
-	printError( "Error: Could not find a modem." )
+	printError( "Could not find a modem." )
 	return false
 end
 
@@ -382,41 +346,38 @@ local function runSession( getRTerm )
 	term.redirect( getRTerm() )
 	term.clear()
 	term.setCursorPos( 1, 1 )
-	local function handleMessages()
-		while server_running do
-			local message = waitForClientMessage()
-			if message and type( message ) == "table" and message.a then
-				if message.a == 1 then
-					if message.t == 0 then
-						for i = 1, last_sent_messages do
-							table.remove( connection.screen_updates, 1 )
+	parallel.waitForAny(
+		function()
+			while server_running do
+				local message = waitForClientMessage()
+				if message and type( message ) == "table" and message.a then
+					if message.a == 1 then
+						if message.t == 0 then
+							for i = 1, last_sent_messages do
+								table.remove( connection.screen_updates, 1 )
+							end
+							last_sent_messages = 0
+							send_screen_next = true
 						end
-						last_sent_messages = 0
-						send_screen_next = true
-					end
-				elseif message.a == 2 then
-					os.queueEvent( unpack( message ) )
-				elseif message.a == 3 then
-					if message.t == 1 then
-						break
+					elseif message.a == 2 then
+						os.queueEvent( unpack( message ) )
 					end
 				end
 			end
-		end
-	end
-	local function handleScreenBuffer()
-		while server_running do
-			if send_screen_next and #connection.screen_updates ~= 0 then
-				last_sent_messages = #connection.screen_updates
-				sendClientMessage( 1, { m = connection.screen_updates } )
-				send_screen_next = false
-			else
-				coroutine.yield()
+		end,
+		function()
+			while server_running do
+				if send_screen_next and #connection.screen_updates ~= 0 then
+					last_sent_messages = #connection.screen_updates
+					sendClientMessage( 1, { m = connection.screen_updates } )
+					send_screen_next = false
+				else
+					coroutine.yield()
+				end
 			end
-		end
-	end
-	
-	waitForAny( wrap( shell.run, "/rom/programs/shell" ), handleMessages, handleScreenBuffer )
+		end,
+		wrap( shell.run, "/rom/programs/shell" )
+	)
 	sendClientMessage( 3, { t = 1 } )
 	term.redirect( oldterm )
 end
@@ -465,16 +426,11 @@ local function sendServerMessage( type, message )
 	)
 end
 
-local function disconnected( message )
+local function disconnect()
 	connection = nil
 	term.clear()
 	term.setCursorPos( 1, 1 )
-	printPrimary( message )
-end
-
-local function disconnect( message )
-	sendServerMessage( 3, { t = 1 } )
-	disconnected( message )
+	printPrimary("Disconnected from server.")
 end
 
 local function runMessages()
@@ -508,7 +464,7 @@ local function runMessages()
 				sendServerMessage( 1, { t = 0 } )
 			elseif message.a == 3 then
 				if message.t == 1 then
-					return disconnected( "Disconnected from server." )
+					return disconnect()
 				end
 			end
 		end
@@ -526,14 +482,19 @@ local function runEvents()
 		mouse_scroll = true,
 		mouse_drag = true,
 		monitor_touch = true,
-		monitor_resize = true,
-
-		terminate = true
+		monitor_resize = true
 	}
 	while connection do
-		local eventData = { os.pullEventRaw() }
-		if forwardEvents[eventData[1]] then
-			sendServerMessage( 2, eventData )
+		local name, p1, p2, p3, p4, p5, p6 = os.pullEvent()
+		if forwardEvents[name] then
+			sendServerMessage( 2, {
+				name,
+				p1,
+				p2,
+				p3,
+				p4,
+				p5
+			})
 		end
 	end
 end
@@ -578,7 +539,7 @@ local function connectToServer( id )
 	connection.auth = true
 	term.clear()
 	term.setCursorPos( 1, 1 )
-	waitForAny(
+	parallel.waitForAny(
 		runEvents,
 		runMessages
 	)
