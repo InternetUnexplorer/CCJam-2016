@@ -3,7 +3,7 @@
 -- FAR -----------------------------------------------------------------
 ------------------------------------------------------------------------
 ------------------------------------------------------------------------
-local global_timeout = 2
+local global_timeout = 1
 local config_file_path = "/.settings"
 local primary_color = colors.yellow
 
@@ -381,11 +381,15 @@ local function handleNewConnection( senderId, message )
 end
 
 local function addScreenUpdate( contents )
-	if send_screen_next and #connection.screen_updates == 0 then
+	if send_screen_next and not connection.screen_updates[1] then
 		send_screen_next = false
 		sendClientMessage( 1, { m = { contents } } )
 	else
-		table.insert( connection.screen_updates, contents)
+		if connection.screen_updates[1] and connection.screen_updates[1].t == 6 then
+			connection.screen_updates[1].s = connection.screen_updates[1].s .. contents.s
+		else
+			table.insert( connection.screen_updates, contents )
+		end
 	end
 end
 
@@ -395,11 +399,11 @@ local function runSession( rterm )
 	term.clear()
 	term.setCursorPos( 1, 1 )
 	local function handleMessages()
-		local timed_out = false
+		local timed_out = 0
 		while server_running do
 			local message = waitForClientMessage()
 			if message and type( message ) == "table" and message.a then
-				timed_out = false
+				timed_out = 0
 				if message.a == 1 then
 					if message.t == 0 then
 						if last_sent_messages > 0 then
@@ -420,11 +424,11 @@ local function runSession( rterm )
 					end
 				end
 			else
-				if timed_out then
+				if timed_out > 3 then
 					sendClientMessage( 3, { t = 2 } )
 					break
 				else
-					timed_out = true
+					timed_out = timed_out + 1
 				end
 			end
 		end
@@ -451,6 +455,9 @@ local function runServer( getRTerm )
 	server_running = true
 	term.clear()
 	term.setCursorPos( 1, 1 )
+	term.setBackgroundColor( colors.black )
+	term.setTextColor( colors.white )
+	term.setCursorBlink( false )
 	print("No client is connected.")
 	while server_running do
 		--Wait for a new connection
@@ -496,13 +503,8 @@ local function setupWindow()
 	term.redirect( parentWindow )
 end
 
-local function scrollWindow( x, y )
-	if hScroll < 0 then x = 0 end
-	if vScroll < 0 then y = 0 end
-	if x == 0 and y == 0 then return end
+local function rectifyBoundaries()
 	local w, h = old_term.getSize()
-	hScroll = hScroll + x
-	vScroll = vScroll + y
 	if hScroll > connection.screen_w - w then
 		hScroll = connection.screen_w - w
 	elseif hScroll < 0 then
@@ -513,6 +515,16 @@ local function scrollWindow( x, y )
 	elseif vScroll < 0 then
 		vScroll = 0
 	end
+
+end
+
+local function scrollWindow( x, y )
+	if hScroll < 0 then x = 0 end
+	if vScroll < 0 then y = 0 end
+	if x == 0 and y == 0 then return end
+	hScroll = hScroll + x
+	vScroll = vScroll + y
+	rectifyBoundaries()
 	parentWindow.reposition( 1 - hScroll, 1 - vScroll )
 end
 
@@ -556,11 +568,11 @@ end
 
 local function runMessages()
 	local color = term.isColor()
-	local timed_out = false
+	local timed_out = 0
 	while connection do
 		local message = waitForServerMessage()
 		if message then
-			timed_out = false
+			timed_out = 0
 			if message.a == 1 then -- Term update
 				for i = 1, #message.m do
 					local message = message.m[i]
@@ -593,8 +605,8 @@ local function runMessages()
 				end
 			end
 		else
-			if not timed_out then
-				timed_out = true
+			if timed_out < 3 then
+				timed_out = timed_out + 1
 			else
 				sendServerMessage( 3, { t = 1 } )
 				return disconnected( "Connection to server lost." )
@@ -605,9 +617,9 @@ local function runMessages()
 end
 
 local function runEvents()
-	local lCtrlPressed = false
+	local lAltPressed = false
 	local lShiftPressed = false
-	local rCtrlPressed = false
+	local rAltPressed = false
 	local rShiftPressed = false
 
 	local forwardEvents = {
@@ -642,9 +654,9 @@ local function runEvents()
 			elseif eventData[1] == "key" then
 				if eventData[2] == 42 then lShiftPressed = true end
 				if eventData[2] == 54 then rShiftPressed = true end
-				if eventData[2] == 29 then lCtrlPressed = true end
-				if eventData[2] == 157 then lCtrlPressed = true end
-				if (lShiftPressed or rShiftPressed) and (lCtrlPressed or rCtrlPressed) then
+				if eventData[2] == 56 then lAltPressed = true end
+				if eventData[2] == 184 then rAltPressed = true end
+				if (lShiftPressed or rShiftPressed) and (lAltPressed or rAltPressed) then
 					local x = 0
 					local y = 0
 					if eventData[2] == 203 then
@@ -665,10 +677,10 @@ local function runEvents()
 					end
 				end
 			elseif eventData[1] == "key_up" then
-			if eventData[2] == 42 then lShiftPressed = false end
+				if eventData[2] == 42 then lShiftPressed = false end
 				if eventData[2] == 54 then rShiftPressed = false end
-				if eventData[2] == 29 then lCtrlPressed = false end
-				if eventData[2] == 157 then lCtrlPressed = false end
+				if eventData[2] == 29 then lAltPressed = false end
+				if eventData[2] == 157 then rAltPressed = false end
 			end
 			if not ignoreEvent then
 				sendServerMessage( 2, eventData )
