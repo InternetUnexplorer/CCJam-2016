@@ -11,6 +11,7 @@ local connection
 local server_running = false
 local send_screen_next = false
 local last_sent_messages = 0
+local far_version = "0.9.4"
 ------------------------------------------------------------------------
 -- UTILITY FUNCTIONS ---------------------------------------------------
 ------------------------------------------------------------------------
@@ -18,6 +19,15 @@ local last_sent_messages = 0
 local function wrap(f, ...)
 	local args = { ... }
 	return function() f(unpack(args)) end
+end
+
+local function shallowCompare( t1, t2 )
+	for k, v in pairs( t1 ) do
+		if t2[k] ~= t2[v] then
+			return false
+		end
+	end
+	return true
 end
 
 local function printPrimary( ... )
@@ -29,6 +39,12 @@ local function printPrimary( ... )
 	else
 		print( ... )
 	end
+end
+
+local function printCentered( text, line )
+	local w, h = term.getSize()
+	term.setCursorPos( math.floor( ( w - text:len() ) / 2 ) + 1, line )
+	print( text )
 end
 
 -- Like parallel.waitForAny() except it only forwards terminate events to function1
@@ -385,11 +401,7 @@ local function addScreenUpdate( contents )
 		send_screen_next = false
 		sendClientMessage( 1, { m = { contents } } )
 	else
-		if connection.screen_updates[1] and connection.screen_updates[1].t == 6 then
-			connection.screen_updates[1].s = connection.screen_updates[1].s .. contents.s
-		else
-			table.insert( connection.screen_updates, contents )
-		end
+		table.insert( connection.screen_updates, contents )
 	end
 end
 
@@ -412,7 +424,7 @@ local function runSession( rterm )
 							end
 							last_sent_messages = 0
 						else
-							sendClientMessage( 3, { t = 0 } )
+							sendClientMessage( 3, { t = 8 } )
 						end
 						send_screen_next = true
 					end
@@ -433,32 +445,65 @@ local function runSession( rterm )
 			end
 		end
 	end
+	local function runScreenBuffer()
+		if send_screen_next and #connection.screen_updates ~= 0 then
+			last_sent_messages = #connection.screen_updates
+			sendClientMessage( 1, { m = connection.screen_updates } )
+			send_screen_next = false
+		end
+		coroutine.yield()
+	end
 	local function handleScreenBuffer()
 		while server_running do
-			if send_screen_next and #connection.screen_updates ~= 0 then
-				last_sent_messages = #connection.screen_updates
-				sendClientMessage( 1, { m = connection.screen_updates } )
-				send_screen_next = false
-			else
-				coroutine.yield()
-			end
+			runScreenBuffer()
 		end
 	end
 	
-	waitForAny( { true }, wrap( shell.run, "/rom/programs/shell" ), handleMessages, handleScreenBuffer )
+	local ok, err = pcall( waitForAny, { true }, wrap( shell.run, "/rom/programs/shell" ), handleMessages, handleScreenBuffer )
 	sendClientMessage( 3, { t = 1 } )
 	connection = nil
 	term.redirect( oldterm )
+	if not ok then
+		printError( "An error occurred, and the connection was lost.")
+		printError(": " .. err)
+	end
 end
 
 local function runServer( getRTerm )
 	server_running = true
-	term.clear()
-	term.setCursorPos( 1, 1 )
-	term.setBackgroundColor( colors.black )
-	term.setTextColor( colors.white )
-	term.setCursorBlink( false )
-	print("No client is connected.")
+	local function postClear()
+		local w, h = term.getSize()
+		if term.isColor() then term.setBackgroundColor( colors.blue ) else term.setBackgroundColor( colors.black ) end
+		term.clear()
+		term.setTextColor( colors.white )
+		term.setCursorBlink( false )
+		local lines
+		if w >= 45 and h >=9 then
+			local xline = "computer and run \"far client "..os.getComputerID().."\""
+			local pnum = math.ceil((43 - xline:len()) / 2)
+			lines = {
+				"+---------------- [ F A R ] ----------------+",
+				"|           No client is connected.         |",
+				"|     To connect, download far on another   |",
+				"|"..string.rep(" ", math.ceil((43 - xline:len()) / 2) + 1)..xline..string.rep(" ", math.floor((43 - xline:len() - 1) / 2)).."|",
+				"+-------------------------------------------+",
+			}
+			for i = 1, #lines - 1 do
+				table.insert( lines, i*2, "|                                           |" )
+			end
+		else
+			lines = {
+				"\187 FAR \171",
+				"No client is connected"
+			}
+		end
+		local startLine = math.floor( ( h - #lines ) / 2 )
+		for i = 1, #lines do
+			printCentered( lines[i], startLine + i )
+		end
+		term.setBackgroundColor( colors.black )
+	end
+	postClear()
 	while server_running do
 		--Wait for a new connection
 		local senderId, message, protocol = rednet.receive( "far", global_timeout )
@@ -469,9 +514,7 @@ local function runServer( getRTerm )
 					connection = nil
 				else
 					runSession( getRTerm() )
-					term.clear()
-					term.setCursorPos( 1, 1 )
-					print("No client is connected.")
+					postClear()
 				end
 			end
 		end
@@ -601,7 +644,7 @@ local function runMessages()
 				if message.t == 1 then
 					return disconnected( "Disconnected from server." )
 				elseif message.t == 2 then
-					return disconnected( "Connection to server lost." )
+					return disconnected( "Connection closed. (Server Error)" )
 				end
 			end
 		else
@@ -703,7 +746,6 @@ local function connectToServer( id )
 	--Ask for a password
 	write("Password: ")
 	local password = read("*")
-	printPrimary("Connecting...")
 	local password_hashed = sha256( password )
 	--Initiate connection
 	connection = {}
@@ -713,11 +755,32 @@ local function connectToServer( id )
 		{
 			message = "init_connection",
 			passwd = password_hashed,
-			use_color = term.isColor()
+			use_color = term.isColor(),
+			far_version = far_version
 		},
 		"far"
 	)
-	local message = waitForServerMessage()
+	local message
+	local function loadingSpinner()
+		local x, y = term.getCursorPos()
+		local steps = { "-", "\\", "|", "/" }
+		local i = 1
+		while true do
+			if i > #steps then
+				i = 1
+			end
+			write("Connecting "..steps[i])
+			term.setCursorPos( 1, y )
+			sleep(0.1)
+			term.clearLine()
+			i = i + 1
+		end
+	end
+	local function getResponse()
+		message = waitForServerMessage()
+	end
+	parallel.waitForAny( getResponse, loadingSpinner )
+	print("Connecting...")
 	if (not message) or message.message == "err" then
 		printError("Connection failed: "..((message and message.error_message) or "Timed out."))
 		return false
@@ -856,16 +919,108 @@ end
 -- HELP / USAGE --------------------------------------------------------
 ------------------------------------------------------------------------
 
+local function showVersionInfo()
+	local w, h = term.getSize()
+	if term.isColor() then term.setBackgroundColor( colors.blue ) else term.setBackgroundColor( colors.black ) end
+	term.clear()
+	term.setTextColor( colors.white )
+	term.setCursorBlink( false )
+	local lines
+	if w >= 37 and h >=14 then
+		lines = {
+			"+-----------------------------------+",
+			"|         FAR version "..far_version.."         |",
+			"+-----------------------------------+",
+			"| Credits / Thanks to:              |",
+			"| \007 GravityScore for his sha256 lib |",
+			"| \007 Viluon for LuaExtended and LECC |",
+			"| \007 The people of oeed/Silica and \172 |",
+			"|   oeed/CCJam-2016 for awesomeness |",
+			"+-----------------------------------+",
+			"| Made with \003 by InternetUnexplorer |",
+			"|      for CCJam 2016 - \169 2016      |",
+			"+-----------------------------------+",
+			"Press a key to continue"
+		}
+		local startLine = math.floor( ( h - #lines ) / 2 )
+		for i = 1, #lines do
+			printCentered( lines[i], startLine + i )
+		end
+		os.pullEvent("key")
+		os.pullEvent("char")
+	else
+		lines = {
+			{
+				"\187 FAR v"..far_version.." \171",
+				"",
+				"Made with \003 by",
+				"InternetUnexplorer",
+				"for CCJam 2016",
+				"\169 2016"
+			},
+			{
+				"\007 Thanks To \007",
+				"",
+				"GravityScore for",
+				"his sha256 lib"
+			},
+			{
+				"\007 Thanks To \007",
+				"",
+				"Viluon for",
+				"LuaExtended & LECC"
+			},
+			{
+				"\007 Thanks To \007",
+				"",
+				"The people of",
+				"oeed/Silica and",
+				"oeed/CCJam-2016",
+				"for awesomeness"
+			}
+		}
+		for i=1, #lines do
+			local clines = lines[i]
+			table.insert( clines, "" )
+			table.insert( clines, "Press a key" )
+			local startLine = math.floor( ( h - #clines ) / 2 )
+			for i = 1, #clines do
+				printCentered( clines[i], startLine + i )
+			end
+			os.pullEvent("key")
+			os.pullEvent("char")
+			term.clear()
+		end
+	end
+	term.setBackgroundColor( colors.black )
+	term.setCursorPos( 1, 1 )
+	term.clear()
+end
+
 local function printUsage()
-	print("Usage:")
-	print("Client Commands -----")
-	print("far client <ID>")
-	print(" - connects to server at <ID>")
-	print("Server Commands -----")
-	print("far server")
-	print(" - starts the server so other computers can connect")
-	print("far password")
-	print(" - changes the password to connect to this computer")
+	local help = {
+		["client_<ID>"] = "connects to server at <ID>",
+		["server"] = "starts the server so other computers can connect",
+		["password"] = "changes the password to connect to this computer",
+		["version"] = "displays credits and version info",
+	}
+	local function pc()
+		term.setTextColor( primary_color )
+	end
+	local function rc()
+		term.setTextColor( colors.white )
+	end
+	print("Usage: ")
+	for k, v in pairs( help ) do
+		pc()
+		term.write( "> " )
+		rc()
+		print( "far "..k:gsub("_", " ") )
+		pc()
+		term.write( " * " )
+		rc()
+		print( v )
+	end
 end
 
 ------------------------------------------------------------------------
@@ -892,8 +1047,11 @@ else
 		end
 	elseif args[1] == "password" then
 		changePassword()
+	elseif args[1] == "version" then
+		showVersionInfo()
 	elseif args[1] ~= "help" then
 		print( "Unknown argument '"..args[1].."'" )
+	else
 		printUsage()
 	end
 end
