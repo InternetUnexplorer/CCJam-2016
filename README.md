@@ -1,5 +1,5 @@
 # FAR - Remote Shell for CC
-[![forthebadge](http://forthebadge.com/images/badges/compatibility-pc-load-letter.svg)](http://forthebadge.com) [![forthebadge](http://forthebadge.com/images/badges/does-not-contain-treenuts.svg)](http://forthebadge.com)
+[![forthebadge](http://forthebadge.com/images/badges/compatibility-ie-6.svg)](http://forthebadge.com) [![forthebadge](http://forthebadge.com/images/badges/does-not-contain-treenuts.svg)](http://forthebadge.com)
 
 Far is a program that allows you to access a shell session on a remote computer. Made with <3 by InternetUnexplorer for CCJam 2016.
 ## Features
