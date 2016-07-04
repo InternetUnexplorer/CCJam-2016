@@ -12,6 +12,27 @@ local server_running = false
 local send_screen_next = false
 local last_sent_messages = 0
 local far_version = "0.9.4"
+
+------------------------------------------------------------------------
+-- SHELL COMPLETIONS ---------------------------------------------------
+------------------------------------------------------------------------
+
+local function tabCompletionFunction( shell, parNumber, curText )
+	local ops = { "server", "client", "password", "version" }
+	local results = {}
+	if parNumber == 1 then
+		for i=1, #ops do
+			local word = ops[i]
+			if word:sub(1, #curText) == curText then
+				results[#results + 1] = word:sub(#curText + 1)
+			end
+		end
+	end
+	return results
+end
+
+shell.setCompletionFunction("far", tabCompletionFunction)
+
 ------------------------------------------------------------------------
 -- UTILITY FUNCTIONS ---------------------------------------------------
 ------------------------------------------------------------------------
@@ -485,7 +506,7 @@ local function runServer( getRTerm )
 				"+---------------- [ F A R ] ----------------+",
 				"|           No client is connected.         |",
 				"|     To connect, download far on another   |",
-				"|"..string.rep(" ", math.ceil((43 - xline:len()) / 2) + 1)..xline..string.rep(" ", math.floor((43 - xline:len() - 1) / 2)).."|",
+				"|"..string.rep(" ", math.ceil((43 - xline:len()) / 2) + 1)..xline..string.rep(" ", 45 - (math.ceil((43 - xline:len()) / 2) + 3) - xline:len()).."|",
 				"+-------------------------------------------+",
 			}
 			for i = 1, #lines - 1 do
