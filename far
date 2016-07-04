@@ -390,7 +390,7 @@ local function handleNewConnection( senderId, message )
 	settings.load( config_file_path )
 	if settings.get( "far.password" ) == message.passwd then
 		--Check if the client is compatible
-		if term.native().isColor() and not message.use_color then
+		if term.current().isColor() and not message.use_color then
 			rednet.send(
 				senderId,
 				{ message = "err", error_message = "This computer uses color, you need a color monitor to connect." },
@@ -398,7 +398,7 @@ local function handleNewConnection( senderId, message )
 			)
 		else
 			connection.auth = true
-			connection.use_color = term.native().isColor()
+			connection.use_color = term.current().isColor()
 			connection.screen_updates = {}
 			local w, h = term.getSize()
 			rednet.send(
@@ -1026,7 +1026,11 @@ local function printUsage()
 		["version"] = "displays credits and version info",
 	}
 	local function pc()
-		term.setTextColor( primary_color )
+		if term.isColor() then
+			term.setTextColor( primary_color )
+		else
+			term.setTextColor( colors.gray )
+		end
 	end
 	local function rc()
 		term.setTextColor( colors.white )
