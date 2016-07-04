@@ -27,7 +27,7 @@ Far is very versatile, and can be used to
 ... And a bunch of other things I didn't think of here
 
 ## Setup
-Download the latest version using `wget https://github.com/InternetUnexplorer/CCJam-2016/blob/master/far far`
+Download the latest version using `wget https://raw.githubusercontent.com/InternetUnexplorer/CCJam-2016/master/far far`
 > Note: Make sure that you only have one instance of the server/client running on your machine at a time, or else things will get weird!
 
 ##### If you want to _host:_
