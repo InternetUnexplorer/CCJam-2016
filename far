@@ -1072,7 +1072,6 @@ else
 		showVersionInfo()
 	elseif args[1] ~= "help" then
 		print( "Unknown argument '"..args[1].."'" )
-	else
 		printUsage()
 	end
 end
